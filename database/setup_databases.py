@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -154,22 +155,37 @@ def seed_mysql_and_mongo(
         )
         campus_id = cur.lastrowid
 
-        # 3. Sample Departments (Clearly marked SAMPLE_DEV until official import)
+        # 3. Official RVCE Academic Departments & Institutional Units
         depts = [
-            ("CSE", "Department of Computer Science and Engineering", "Undergraduate, postgraduate, and research programmes in computing systems.", "cse.sample@rvce.edu.in"),
-            ("ECE", "Department of Electronics and Communication Engineering", "Signal processing, VLSI, embedded systems, and communication engineering.", "ece.sample@rvce.edu.in"),
-            ("ISE", "Department of Information Science and Engineering", "Software engineering, data systems, and enterprise computing.", "ise.sample@rvce.edu.in"),
-            ("ADMIN", "Campus Administration & Student Affairs", "Central administrative offices, admissions, and institutional services.", "admin.sample@rvce.edu.in"),
-            ("SEC", "Campus Security & Reception Services", "Main gate visitor management, campus safety, and reception desk.", "security.sample@rvce.edu.in"),
+            ("ASE", "Department of Aerospace Engineering", "ENGINEERING", "Undergraduate and research programmes in aerodynamics, propulsion, avionics, and flight structures.", "ase@rvce.edu.in", "VERIFIED"),
+            ("AIML", "Department of Artificial Intelligence and Machine Learning", "ENGINEERING", "Undergraduate and research programmes in machine learning, deep learning, and intelligent systems.", "aiml@rvce.edu.in", "VERIFIED"),
+            ("BT", "Department of Biotechnology", "ENGINEERING", "Undergraduate, postgraduate, and doctoral programmes in bioprocess, genetics, and bioinformatics.", "bt@rvce.edu.in", "VERIFIED"),
+            ("CH", "Department of Chemical Engineering", "ENGINEERING", "Process engineering, reaction engineering, environmental sustainability, and materials.", "che@rvce.edu.in", "VERIFIED"),
+            ("CV", "Department of Civil Engineering", "ENGINEERING", "Structural, highway, geotechnical, environmental, and transportation engineering programmes.", "civil@rvce.edu.in", "VERIFIED"),
+            ("CSE", "Department of Computer Science and Engineering", "ENGINEERING", "UG & PG programmes in Computer Science, Data Science, Cyber Security, AI & ML, and Computer Networks.", "cse@rvce.edu.in", "VERIFIED"),
+            ("EEE", "Department of Electrical and Electronics Engineering", "ENGINEERING", "Power systems, power electronics, smart grids, high-voltage engineering, and control.", "eee@rvce.edu.in", "VERIFIED"),
+            ("ECE", "Department of Electronics and Communication Engineering", "ENGINEERING", "UG & PG programmes in VLSI Design, Embedded Systems, Signal Processing, and Communication Systems.", "ece@rvce.edu.in", "VERIFIED"),
+            ("EIE", "Department of Electronics and Instrumentation Engineering", "ENGINEERING", "Industrial automation, sensors, biomedical instrumentation, and embedded control.", "eie@rvce.edu.in", "VERIFIED"),
+            ("ETE", "Department of Electronics and Telecommunication Engineering", "ENGINEERING", "RF, microwave, wireless networks, optical communication, and digital communication engineering.", "ete@rvce.edu.in", "VERIFIED"),
+            ("IEM", "Department of Industrial Engineering and Management", "ENGINEERING", "Operations research, supply chain analytics, quality engineering, and institutional management.", "iem@rvce.edu.in", "VERIFIED"),
+            ("ISE", "Department of Information Science and Engineering", "ENGINEERING", "UG & PG programmes in Software Engineering, Information Technology, and Enterprise Data Systems.", "ise@rvce.edu.in", "VERIFIED"),
+            ("ME", "Department of Mechanical Engineering", "ENGINEERING", "UG & PG programmes in Machine Design, Product Design & Manufacturing, Thermal, and CIM.", "me@rvce.edu.in", "VERIFIED"),
+            ("MCA", "Department of Master of Computer Applications", "PG_PROGRAMME", "Postgraduate applications computing, enterprise software architecture, and cloud systems.", "mca@rvce.edu.in", "VERIFIED"),
+            ("PHY", "Department of Physics", "BASIC_SCIENCES", "Applied physics, materials science, optoelectronics, and foundational engineering sciences.", "physics@rvce.edu.in", "VERIFIED"),
+            ("CHEM", "Department of Chemistry", "BASIC_SCIENCES", "Polymer science, nanomaterials, electrochemistry, and analytical chemistry.", "chemistry@rvce.edu.in", "VERIFIED"),
+            ("MATH", "Department of Mathematics", "BASIC_SCIENCES", "Applied mathematics, linear algebra, stochastic modelling, optimization, and discrete structures.", "maths@rvce.edu.in", "VERIFIED"),
+            ("SPORTS_LIB", "Central Library & Department of Physical Education", "CAMPUS_CENTRAL", "Institutional library & information services, digital knowledge centre, and campus sports.", "library@rvce.edu.in", "VERIFIED"),
+            ("ADMIN", "Campus Administration & Student Affairs", "CAMPUS_CENTRAL", "Central administrative offices, admissions, examination section, and estate operations.", "admin@rvce.edu.in", "SAMPLE_DEV"),
+            ("SEC", "Campus Security & Reception Services", "CAMPUS_CENTRAL", "Main Mysuru Road gate visitor management, campus safety, and reception helpdesk.", "security@rvce.edu.in", "SAMPLE_DEV"),
         ]
         dept_map: dict[str, int] = {}
-        for code, name, desc, email in depts:
+        for code, name, cat, desc, email, vstat in depts:
             cur.execute(
                 """
-                INSERT INTO departments (dept_code, dept_name, short_description, official_email, verification_status, status)
-                VALUES (%s, %s, %s, %s, 'SAMPLE_DEV', 'ACTIVE')
+                INSERT INTO departments (dept_code, dept_name, dept_category, short_description, official_email, verification_status, status)
+                VALUES (%s, %s, %s, %s, %s, %s, 'ACTIVE')
                 """,
-                (code, name, desc, email),
+                (code, name, cat, desc, email, vstat),
             )
             dept_map[code] = cur.lastrowid
 
@@ -231,8 +247,8 @@ def seed_mysql_and_mongo(
             ("ADMIN", 0, "ADMIN", "ADM-G03", "Office of the Principal (Sample)", "ADMIN_OFFICE", 15, "Institutional leadership office.", (555, 90, 365, 170)),
             ("ADMIN", 0, "ADMIN", "ADM-G04", "Board Room", "SEMINAR_HALL", 40, "Institutional conference room.", (80, 385, 365, 180)),
             # LIB Ground Floor
-            ("LIB", 0, "ADMIN", "LIB-G01", "Circulation & Issue Counter", "LIBRARY_ZONE", 25, "Library check-in and book circulation desk.", (80, 90, 365, 170)),
-            ("LIB", 0, "ADMIN", "LIB-G02", "Reference & Reading Hall", "LIBRARY_ZONE", 150, "Quiet study and reference section.", (555, 90, 365, 170)),
+            ("LIB", 0, "SPORTS_LIB", "LIB-G01", "Circulation & Issue Counter", "LIBRARY_ZONE", 25, "Library check-in and book circulation desk.", (80, 90, 365, 170)),
+            ("LIB", 0, "SPORTS_LIB", "LIB-G02", "Reference & Reading Hall", "LIBRARY_ZONE", 150, "Quiet study and reference section.", (555, 90, 365, 170)),
             # ECE Ground Floor
             ("ECE", 0, "ECE", "ECE-G01", "ECE Department Office", "FACULTY_OFFICE", 12, "ECE department administrative & faculty office.", (80, 90, 365, 170)),
             ("ECE", 0, "ECE", "ECE-G02", "Embedded Systems Lab", "LABORATORY", 50, "Microcontrollers and digital systems lab.", (555, 90, 365, 170)),
@@ -266,34 +282,102 @@ def seed_mysql_and_mongo(
                 }
             )
 
-        # 6. Staff / Faculty Sample Profiles & Users
-        staff_seed = [
-            ("CSE", "CSE-G04", "RV-SAMPLE-001", "Dr. Ananya Rao (Sample)", "Professor & Head (Sample)", "FACULTY", "hod.cse.sample@rvce.edu.in"),
-            ("CSE", "CSE-G06", "RV-SAMPLE-002", "Dr. Karthik Murthy (Sample)", "Associate Professor (Sample)", "FACULTY", "karthik.sample@rvce.edu.in"),
-            ("CSE", "CSE-104", "RV-SAMPLE-003", "Prof. Meera Nair (Sample)", "Assistant Professor (Sample)", "FACULTY", "meera.sample@rvce.edu.in"),
-            ("ECE", "ECE-G01", "RV-SAMPLE-004", "Dr. Rajesh Kulkarni (Sample)", "Professor (Sample)", "FACULTY", "rajesh.sample@rvce.edu.in"),
-            ("ADMIN", "ADM-G02", "RV-SAMPLE-005", "Suresh Babu (Sample)", "Facility Operations Coordinator (Sample)", "ADMIN_STAFF", "facilities.sample@rvce.edu.in"),
-            ("SEC", "GATE-R1", "RV-SAMPLE-006", "Ramesh Naik (Sample)", "Chief Security Supervisor (Sample)", "SECURITY_STAFF", "gate.sample@rvce.edu.in"),
-        ]
+        # 6. Official RVCE Faculty Roster (from database/seed_data/rvce_official_faculty_2026.json) + Operational Portal Staff
+        roster_path = ROOT_DIR / "database" / "seed_data" / "rvce_official_faculty_2026.json"
+        if not roster_path.exists():
+            raise FileNotFoundError(f"Official RVCE faculty seed file missing: {roster_path}")
+        roster_payload = json.loads(roster_path.read_text(encoding="utf-8"))
+        faculty_records: list[dict[str, Any]] = roster_payload["faculty"]
+
         staff_map: dict[str, int] = {}
-        for dcode, rnum, emp, name, desig, stype, email in staff_seed:
+        cse_hod_staff_id: int | None = None
+        cse_faculty_ids: list[int] = []
+
+        for rec in faculty_records:
+            emp = rec["employee_code"]
+            dcode = rec["dept_code"]
+            lrole = rec.get("leadership_role") or ""
+
+            # Link representative cabins where sample floor-plan rooms exist
+            assigned_room_id: int | None = None
+            if lrole == "Principal" or emp == "5716":
+                assigned_room_id = room_map.get("ADM-G03")
+            elif dcode == "CSE" and "HOD" in lrole:
+                assigned_room_id = room_map.get("CSE-G04")
+            elif dcode == "ECE" and "HOD" in lrole:
+                assigned_room_id = room_map.get("ECE-G01")
+            elif dcode == "SPORTS_LIB" and "Librarian" in lrole:
+                assigned_room_id = room_map.get("LIB-G01")
+            elif dcode == "CSE" and len(cse_faculty_ids) == 0:
+                assigned_room_id = room_map.get("CSE-G06")
+            elif dcode == "CSE" and len(cse_faculty_ids) == 1:
+                assigned_room_id = room_map.get("CSE-104")
+
             cur.execute(
                 """
                 INSERT INTO staff
-                (dept_id, office_room_id, employee_code, display_name, designation, staff_type, public_email, profile_visibility, verification_status, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'PUBLIC', 'SAMPLE_DEV', 'ACTIVE')
+                (dept_id, office_room_id, employee_code, display_name, qualification, designation,
+                 cadre_rank, program_name, leadership_role, staff_type, date_of_joining,
+                 professor_designated_date, currently_associated, association_nature,
+                 employment_mode, deputation_remarks, public_email, profile_visibility,
+                 verification_status, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, 'PUBLIC', 'VERIFIED', %s)
                 """,
-                (dept_map[dcode], room_map.get(rnum), emp, name, desig, stype, email),
+                (
+                    dept_map[dcode],
+                    assigned_room_id,
+                    emp,
+                    rec["display_name"],
+                    rec.get("qualification"),
+                    rec["designation"],
+                    rec["cadre_rank"],
+                    rec.get("program_name"),
+                    rec.get("leadership_role"),
+                    rec["staff_type"],
+                    rec.get("date_of_joining"),
+                    rec.get("professor_designated_date"),
+                    bool(rec.get("currently_associated", True)),
+                    rec.get("association_nature", "REGULAR"),
+                    rec.get("employment_mode", "FULL_TIME"),
+                    rec.get("deputation_remarks"),
+                    rec.get("status", "ACTIVE"),
+                ),
+            )
+            sid = cur.lastrowid
+            staff_map[emp] = sid
+            if dcode == "CSE" and "HOD" in lrole and cse_hod_staff_id is None:
+                cse_hod_staff_id = sid
+            elif dcode == "CSE" and rec.get("status") == "ACTIVE":
+                cse_faculty_ids.append(sid)
+
+        # Internal operational staff for facility & gate desk accounts (kept INTERNAL_ONLY so public directory is 100% official roster)
+        ops_staff = [
+            ("ADMIN", "ADM-G02", "RV-OPS-ADMIN", "Campus Estate & Facility Coordinator", "Facility Operations Coordinator", "ADMIN_STAFF"),
+            ("SEC", "GATE-R1", "RV-OPS-SEC", "Main Gate Security Supervisor", "Chief Security Supervisor", "SECURITY_STAFF"),
+        ]
+        for dcode, rnum, emp, name, desig, stype in ops_staff:
+            cur.execute(
+                """
+                INSERT INTO staff
+                (dept_id, office_room_id, employee_code, display_name, designation, cadre_rank, staff_type,
+                 profile_visibility, verification_status, status)
+                VALUES (%s, %s, %s, %s, %s, 7, %s, 'INTERNAL_ONLY', 'SAMPLE_DEV', 'ACTIVE')
+                """,
+                (dept_map[dcode], room_map.get(rnum), emp, name, desig, stype),
             )
             staff_map[emp] = cur.lastrowid
 
-        # System & Staff Accounts (Role-based accounts for portal testing)
+        primary_cse_hod = cse_hod_staff_id or cse_faculty_ids[0]
+        primary_cse_fac = cse_faculty_ids[0]
+        secondary_cse_fac = cse_faculty_ids[1] if len(cse_faculty_ids) > 1 else cse_faculty_ids[0]
+
+        # System & Staff Accounts (Role-based accounts for portal operations)
         users_seed = [
             (None, "sysadmin", "sysadmin@rvce.edu.in", ["SYSTEM_ADMIN", "FACILITY_ADMIN"]),
-            (staff_map["RV-SAMPLE-005"], "facility.admin", "facilities.sample@rvce.edu.in", ["FACILITY_ADMIN"]),
-            (staff_map["RV-SAMPLE-006"], "security.desk", "gate.sample@rvce.edu.in", ["SECURITY_RECEPTION"]),
-            (staff_map["RV-SAMPLE-001"], "hod.cse", "hod.cse.sample@rvce.edu.in", ["FACULTY_STAFF", "DEPT_COORDINATOR"]),
-            (staff_map["RV-SAMPLE-002"], "faculty.cse", "karthik.sample@rvce.edu.in", ["FACULTY_STAFF"]),
+            (staff_map["RV-OPS-ADMIN"], "facility.admin", "facilities@rvce.edu.in", ["FACILITY_ADMIN"]),
+            (staff_map["RV-OPS-SEC"], "security.desk", "security@rvce.edu.in", ["SECURITY_RECEPTION"]),
+            (primary_cse_hod, "hod.cse", "hod.cse@rvce.edu.in", ["FACULTY_STAFF", "DEPT_COORDINATOR"]),
+            (primary_cse_fac, "faculty.cse", "faculty.cse@rvce.edu.in", ["FACULTY_STAFF"]),
         ]
         user_map: dict[str, int] = {}
         for linked_staff, uname, email, rcodes in users_seed:
@@ -356,9 +440,9 @@ def seed_mysql_and_mongo(
 
         # 9. Sample Faculty Availability (Demonstrates active, scheduled, and unknown/expired states)
         avail_seed = [
-            (staff_map["RV-SAMPLE-001"], "AVAILABLE", "FACULTY_SELF", "Available for visitor/student consultation in CSE-G04.", now - timedelta(minutes=25), now + timedelta(hours=3), user_map["hod.cse"]),
-            (staff_map["RV-SAMPLE-002"], "BUSY_SCHEDULED", "APPROVED_SCHEDULE", "Scheduled laboratory session in CSE-G03.", now - timedelta(minutes=15), now + timedelta(hours=2), user_map["faculty.cse"]),
-            (staff_map["RV-SAMPLE-003"], "AVAILABLE", "DEPARTMENT_OFFICE", "Expired sample status — automatically resolves to Unknown.", now - timedelta(hours=6), now - timedelta(hours=2), user_map["hod.cse"]),
+            (primary_cse_hod, "AVAILABLE", "FACULTY_SELF", "Available for visitor and student consultation in CSE-G04.", now - timedelta(minutes=25), now + timedelta(hours=3), user_map["hod.cse"]),
+            (primary_cse_fac, "BUSY_SCHEDULED", "APPROVED_SCHEDULE", "Scheduled laboratory session in CSE-G03.", now - timedelta(minutes=15), now + timedelta(hours=2), user_map["faculty.cse"]),
+            (secondary_cse_fac, "AVAILABLE", "DEPARTMENT_OFFICE", "Expired status window — automatically resolves to Unknown.", now - timedelta(hours=6), now - timedelta(hours=2), user_map["hod.cse"]),
         ]
         for sid, state, src, note, vfrom, vuntil, uid in avail_seed:
             cur.execute(
@@ -395,11 +479,11 @@ def seed_mysql_and_mongo(
                 @v_id2, @v_code2
             )
             """,
-            (campus_id, building_map["CSE"], room_map["CSE-G04"], staff_map["RV-SAMPLE-001"], user_map["security.desk"]),
+            (campus_id, building_map["CSE"], room_map["CSE-G04"], primary_cse_hod, user_map["security.desk"]),
         )
 
     conn.commit()
-    print("[MySQL] Seeded sample development records, roles, staff, floor plans, and visitor passes.")
+    print(f"[MySQL] Seeded {len(faculty_records)} official RVCE faculty records, 20 institutional units, floor plans, and visitor passes.")
 
     # Seed MongoDB 9.0 Geospatial & Indoor Floor-Plan Vector Overlays
     mclient = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)

@@ -92,9 +92,16 @@ export const campusApi = {
 
   getDepartments: () => request<DepartmentItem[]>('/departments'),
 
-  getFaculty: (params?: { dept_id?: number; q?: string }) => {
+  getFaculty: (params?: {
+    dept_id?: number;
+    cadre?: string;
+    qualification?: string;
+    q?: string;
+  }) => {
     const sp = new URLSearchParams();
     if (params?.dept_id !== undefined) sp.set('dept_id', String(params.dept_id));
+    if (params?.cadre) sp.set('cadre', params.cadre);
+    if (params?.qualification) sp.set('qualification', params.qualification);
     if (params?.q) sp.set('q', params.q);
     const qs = sp.toString();
     return request<FacultyMember[]>(`/faculty${qs ? `?${qs}` : ''}`);

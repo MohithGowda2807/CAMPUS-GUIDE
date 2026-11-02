@@ -13,6 +13,7 @@
 /WhatsApp Image*.jpg
 /WhatsApp Image*.png
 /Logo.png
+/Faculty-List-for-Website-UploadingApril2026.pdf
 
 # Environment & Secrets (NEVER commit credentials)
 .env

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from pydantic import BaseModel, EmailStr, Field
 
@@ -134,9 +134,20 @@ class StaffCreateUpdateRequest(BaseModel):
     dept_id: int
     office_room_id: int | None = None
     employee_code: str = Field(..., min_length=2, max_length=30)
-    display_name: str = Field(..., min_length=2, max_length=120)
-    designation: str = Field(..., min_length=2, max_length=120)
-    staff_type: Literal["FACULTY", "ADMIN_STAFF", "TECHNICAL_STAFF", "SECURITY_STAFF"] = "FACULTY"
+    display_name: str = Field(..., min_length=2, max_length=140)
+    qualification: str | None = Field(default=None, max_length=40)
+    designation: str = Field(..., min_length=2, max_length=180)
+    cadre_rank: int = Field(default=6, ge=1, le=10)
+    program_name: str | None = Field(default=None, max_length=180)
+    leadership_role: str | None = Field(default=None, max_length=140)
+    staff_type: Literal[
+        "FACULTY", "LIBRARIAN_SPORTS", "ADMIN_STAFF", "TECHNICAL_STAFF", "SECURITY_STAFF"
+    ] = "FACULTY"
+    date_of_joining: date | None = None
+    professor_designated_date: date | None = None
+    association_nature: Literal["REGULAR", "CONTRACT", "ADJUNCT"] = "REGULAR"
+    employment_mode: Literal["FULL_TIME", "PART_TIME"] = "FULL_TIME"
+    deputation_remarks: str | None = Field(default=None, max_length=255)
     public_email: EmailStr | None = None
     official_profile_url: str | None = None
     profile_visibility: Literal["PUBLIC", "INTERNAL_ONLY", "HIDDEN"] = "PUBLIC"

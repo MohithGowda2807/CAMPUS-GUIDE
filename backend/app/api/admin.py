@@ -278,9 +278,12 @@ def create_staff_member(
         text(
             """
             INSERT INTO staff
-            (dept_id, office_room_id, employee_code, display_name, designation, staff_type,
+            (dept_id, office_room_id, employee_code, display_name, qualification, designation,
+             cadre_rank, program_name, leadership_role, staff_type, date_of_joining,
+             professor_designated_date, association_nature, employment_mode, deputation_remarks,
              public_email, official_profile_url, profile_visibility, verification_status, status)
-            VALUES (:did, :rid, :ecode, :name, :desig, :stype, :email, :url, :vis, :vstat, :stat)
+            VALUES (:did, :rid, :ecode, :name, :qual, :desig, :crank, :prog, :lrole, :stype,
+                    :doj, :pdate, :assoc, :emode, :rem, :email, :url, :vis, :vstat, :stat)
             """
         ),
         {
@@ -288,8 +291,17 @@ def create_staff_member(
             "rid": payload.office_room_id,
             "ecode": payload.employee_code.strip(),
             "name": payload.display_name.strip(),
+            "qual": payload.qualification.strip() if payload.qualification else None,
             "desig": payload.designation.strip(),
+            "crank": payload.cadre_rank,
+            "prog": payload.program_name.strip() if payload.program_name else None,
+            "lrole": payload.leadership_role.strip() if payload.leadership_role else None,
             "stype": payload.staff_type,
+            "doj": payload.date_of_joining,
+            "pdate": payload.professor_designated_date,
+            "assoc": payload.association_nature,
+            "emode": payload.employment_mode,
+            "rem": payload.deputation_remarks.strip() if payload.deputation_remarks else None,
             "email": str(payload.public_email) if payload.public_email else None,
             "url": payload.official_profile_url,
             "vis": payload.profile_visibility,

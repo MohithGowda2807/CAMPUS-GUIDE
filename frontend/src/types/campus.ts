@@ -174,25 +174,41 @@ export interface DepartmentItem {
   dept_id: number;
   dept_code: string;
   dept_name: string;
+  dept_category?: 'ENGINEERING' | 'PG_PROGRAMME' | 'BASIC_SCIENCES' | 'CAMPUS_CENTRAL';
   short_description: string | null;
   official_email: string | null;
   verification_status: VerificationStatus;
   faculty_count: number;
+  phd_completed_count?: number;
+  professors_count?: number;
   room_count: number;
+  hod_name?: string | null;
 }
 
 export interface FacultyMember {
   staff_id: number;
   employee_code: string;
   display_name: string;
+  qualification: string | null;
   designation: string;
+  cadre_rank: number;
+  program_name: string | null;
+  leadership_role: string | null;
   staff_type: string;
+  date_of_joining: string | null;
+  professor_designated_date: string | null;
+  years_at_rvce: number | null;
+  association_nature: 'REGULAR' | 'CONTRACT' | 'ADJUNCT';
+  employment_mode: 'FULL_TIME' | 'PART_TIME';
+  deputation_remarks: string | null;
   public_email: string | null;
   official_profile_url: string | null;
   verification_status: VerificationStatus;
+  staff_status?: string;
   dept_id: number;
   dept_code: string;
   dept_name: string;
+  dept_category?: string;
   office_room_id: number | null;
   office_room_number: string | null;
   office_room_name: string | null;

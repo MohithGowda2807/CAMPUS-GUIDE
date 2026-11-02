@@ -70,20 +70,36 @@ LEFT JOIN departments d ON d.dept_id = r.dept_id
 WHERE r.public_visibility = TRUE
   AND r.status = 'ACTIVE';
 
--- 3. Public Faculty & Staff Directory View (Truthful Time-Bounded Availability Resolution)
+-- 3. Public Faculty & Staff Directory View (Truthful Time-Bounded Availability + Official Roster Metadata)
 CREATE OR REPLACE VIEW vw_public_faculty_directory AS
 SELECT
     s.staff_id,
     s.employee_code,
     s.display_name,
+    s.qualification,
     s.designation,
+    s.cadre_rank,
+    s.program_name,
+    s.leadership_role,
     s.staff_type,
+    s.date_of_joining,
+    s.professor_designated_date,
+    CASE
+        WHEN s.date_of_joining IS NOT NULL
+        THEN TIMESTAMPDIFF(YEAR, s.date_of_joining, CURRENT_DATE)
+        ELSE NULL
+    END AS years_at_rvce,
+    s.association_nature,
+    s.employment_mode,
+    s.deputation_remarks,
     s.public_email,
     s.official_profile_url,
     s.verification_status,
+    s.status AS staff_status,
     d.dept_id,
     d.dept_code,
     d.dept_name,
+    d.dept_category,
     r.room_id AS office_room_id,
     r.room_number AS office_room_number,
     r.room_name AS office_room_name,
@@ -95,13 +111,18 @@ SELECT
     b.latitude AS building_latitude,
     b.longitude AS building_longitude,
     CASE
+        WHEN s.status = 'ON_LEAVE' THEN 'UNAVAILABLE'
         WHEN fa.availability_id IS NULL THEN 'UNKNOWN'
         WHEN fa.valid_until IS NOT NULL AND fa.valid_until < CURRENT_TIMESTAMP THEN 'UNKNOWN'
         WHEN fa.valid_from > CURRENT_TIMESTAMP THEN 'UNKNOWN'
         ELSE fa.availability_state
     END AS effective_availability,
-    fa.source_type AS availability_source,
     CASE
+        WHEN s.status = 'ON_LEAVE' THEN 'DEPARTMENT_OFFICE'
+        ELSE fa.source_type
+    END AS availability_source,
+    CASE
+        WHEN s.status = 'ON_LEAVE' THEN s.deputation_remarks
         WHEN fa.valid_until IS NOT NULL AND fa.valid_until < CURRENT_TIMESTAMP THEN NULL
         ELSE fa.public_note
     END AS availability_note,
@@ -121,6 +142,35 @@ LEFT JOIN faculty_availability fa ON fa.availability_id = (
 )
 WHERE s.profile_visibility = 'PUBLIC'
   AND s.status <> 'INACTIVE';
+
+-- 3b. Department Summary View (Aggregates Faculty Qualifications, Cadres & HODs)
+CREATE OR REPLACE VIEW vw_department_directory AS
+SELECT
+    d.dept_id,
+    d.dept_code,
+    d.dept_name,
+    d.dept_category,
+    d.short_description,
+    d.official_email,
+    d.verification_status,
+    COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' THEN s.staff_id END) AS faculty_count,
+    COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' AND s.qualification = 'Ph.D' THEN s.staff_id END) AS phd_completed_count,
+    COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' AND s.cadre_rank <= 2 THEN s.staff_id END) AS professors_count,
+    COUNT(DISTINCT CASE WHEN r.public_visibility = TRUE AND r.status = 'ACTIVE' THEN r.room_id END) AS room_count,
+    (
+        SELECT s_hod.display_name
+        FROM staff s_hod
+        WHERE s_hod.dept_id = d.dept_id
+          AND s_hod.status <> 'INACTIVE'
+          AND (s_hod.designation LIKE '%HOD%' OR s_hod.leadership_role LIKE '%HOD%')
+        ORDER BY s_hod.cadre_rank ASC, s_hod.staff_id ASC
+        LIMIT 1
+    ) AS hod_name
+FROM departments d
+LEFT JOIN staff s ON s.dept_id = d.dept_id
+LEFT JOIN rooms r ON r.dept_id = d.dept_id
+WHERE d.status = 'ACTIVE'
+GROUP BY d.dept_id, d.dept_code, d.dept_name, d.dept_category, d.short_description, d.official_email, d.verification_status;
 
 -- 4. Security & Reception Live Visitor Board View
 CREATE OR REPLACE VIEW vw_security_visitor_board AS

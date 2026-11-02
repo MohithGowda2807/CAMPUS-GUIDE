@@ -59,6 +59,7 @@ CREATE TABLE departments (
     dept_id INT AUTO_INCREMENT PRIMARY KEY,
     dept_code VARCHAR(20) NOT NULL,
     dept_name VARCHAR(150) NOT NULL,
+    dept_category ENUM('ENGINEERING', 'PG_PROGRAMME', 'BASIC_SCIENCES', 'CAMPUS_CENTRAL') NOT NULL DEFAULT 'ENGINEERING',
     short_description VARCHAR(500) NULL,
     official_email VARCHAR(150) NULL,
     verification_status ENUM('VERIFIED', 'PENDING_REVIEW', 'SAMPLE_DEV') NOT NULL DEFAULT 'PENDING_REVIEW',
@@ -175,20 +176,30 @@ CREATE TABLE roles (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
--- 7. STAFF / FACULTY
+-- 7. STAFF / FACULTY (Aligned with Official RVCE Teaching & Institutional Roster)
 -- -----------------------------------------------------------------------------
 CREATE TABLE staff (
     staff_id INT AUTO_INCREMENT PRIMARY KEY,
     dept_id INT NOT NULL,
     office_room_id INT NULL,
     employee_code VARCHAR(30) NOT NULL,
-    display_name VARCHAR(120) NOT NULL,
-    designation VARCHAR(120) NOT NULL,
-    staff_type ENUM('FACULTY', 'ADMIN_STAFF', 'TECHNICAL_STAFF', 'SECURITY_STAFF') NOT NULL DEFAULT 'FACULTY',
+    display_name VARCHAR(140) NOT NULL,
+    qualification VARCHAR(40) NULL,
+    designation VARCHAR(180) NOT NULL,
+    cadre_rank TINYINT UNSIGNED NOT NULL DEFAULT 5,
+    program_name VARCHAR(180) NULL,
+    leadership_role VARCHAR(140) NULL,
+    staff_type ENUM('FACULTY', 'LIBRARIAN_SPORTS', 'ADMIN_STAFF', 'TECHNICAL_STAFF', 'SECURITY_STAFF') NOT NULL DEFAULT 'FACULTY',
+    date_of_joining DATE NULL,
+    professor_designated_date DATE NULL,
+    currently_associated BOOLEAN NOT NULL DEFAULT TRUE,
+    association_nature ENUM('REGULAR', 'CONTRACT', 'ADJUNCT') NOT NULL DEFAULT 'REGULAR',
+    employment_mode ENUM('FULL_TIME', 'PART_TIME') NOT NULL DEFAULT 'FULL_TIME',
+    deputation_remarks VARCHAR(255) NULL,
     public_email VARCHAR(150) NULL,
     official_profile_url VARCHAR(255) NULL,
     profile_visibility ENUM('PUBLIC', 'INTERNAL_ONLY', 'HIDDEN') NOT NULL DEFAULT 'PUBLIC',
-    verification_status ENUM('VERIFIED', 'PENDING_REVIEW', 'SAMPLE_DEV') NOT NULL DEFAULT 'PENDING_REVIEW',
+    verification_status ENUM('VERIFIED', 'PENDING_REVIEW', 'SAMPLE_DEV') NOT NULL DEFAULT 'VERIFIED',
     status ENUM('ACTIVE', 'ON_LEAVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -197,8 +208,9 @@ CREATE TABLE staff (
     CONSTRAINT fk_staff_room FOREIGN KEY (office_room_id)
         REFERENCES rooms (room_id) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT uq_staff_emp_code UNIQUE (employee_code),
-    INDEX idx_staff_dept_type (dept_id, staff_type, status),
-    FULLTEXT INDEX ft_staff_search (display_name, designation, employee_code)
+    INDEX idx_staff_dept_cadre (dept_id, cadre_rank, display_name),
+    INDEX idx_staff_leadership (leadership_role),
+    FULLTEXT INDEX ft_staff_search (display_name, designation, employee_code, program_name, leadership_role)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------

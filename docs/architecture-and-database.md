@@ -28,13 +28,13 @@ All **15 InnoDB tables** in `database/mysql/01_schema.sql` satisfy First, Second
 | Table | Primary Key | Key Foreign Keys & Rules | Integrity Constraints & Indexes |
 |---|---|---|---|
 | `campuses` | `campus_id` | — | `UNIQUE(campus_code)`, `CHECK` lat `[-90,90]` & lng `[-180,180]` |
-| `departments` | `dept_id` | — | `UNIQUE(dept_code)`, `UNIQUE(dept_name)` |
+| `departments` | `dept_id` | — | `UNIQUE(dept_code)`, `UNIQUE(dept_name)`, `dept_category` (`ENGINEERING`, `PG_PROGRAMME`, `BASIC_SCIENCES`, `CAMPUS_CENTRAL`) |
 | `buildings` | `building_id` | `campus_id → campuses` (`RESTRICT`) | `UNIQUE(campus_id, building_code)`, `FULLTEXT(building_name, building_code, description)` |
 | `floors` | `floor_id` | `building_id → buildings` (`RESTRICT`) | `UNIQUE(building_id, floor_number)` |
 | `rooms` | `room_id` | `floor_id → floors` (`RESTRICT`), `dept_id → departments` (`SET NULL`) | `UNIQUE(floor_id, room_number)`, `FULLTEXT(room_number, room_name, description)` |
 | `floor_plans` | `floor_plan_id` | `floor_id → floors` (`RESTRICT`), `approved_by_user_id → users` (`SET NULL`) | `UNIQUE(floor_id, version_label)`, `CHECK(canvas_width > 0 AND canvas_height > 0)` |
 | `facilities` | `facility_id` | `campus_id` (`RESTRICT`), nullable `building_id`, `floor_id`, `room_id` (`SET NULL`) | Supports both standalone outdoor POIs and indoor room-linked amenities |
-| `staff` | `staff_id` | `dept_id → departments` (`RESTRICT`), `office_room_id → rooms` (`SET NULL`) | `UNIQUE(employee_code)`, `FULLTEXT(display_name, designation, employee_code)` |
+| `staff` | `staff_id` | `dept_id → departments` (`RESTRICT`), `office_room_id → rooms` (`SET NULL`) | `UNIQUE(employee_code)`, `qualification`, `cadre_rank`, `program_name`, `leadership_role`, `date_of_joining`, `professor_designated_date`, `association_nature`, `employment_mode`, `deputation_remarks`, `FULLTEXT(display_name, designation, employee_code, program_name, leadership_role)` |
 | `faculty_availability` | `availability_id` | `staff_id → staff` (`CASCADE`), `updated_by_user_id → users` (`SET NULL`) | `CHECK(valid_until IS NULL OR valid_until > valid_from)` |
 | `roles` | `role_id` | — | `UNIQUE(role_code)` |
 | `users` | `user_id` | `linked_staff_id → staff` (`SET NULL`) | `UNIQUE(username)`, `UNIQUE(email)`, `UNIQUE(linked_staff_id)` |
@@ -46,7 +46,8 @@ All **15 InnoDB tables** in `database/mysql/01_schema.sql` satisfy First, Second
 ### 2.3 Views (`database/mysql/02_views.sql`)
 - `vw_public_building_directory`: Joins `buildings`, `campuses`, `floors`, `rooms`, and `floor_plans` to compute mapped floor counts, public room counts, and approved floor-plan counts without exposing restricted records.
 - `vw_public_room_directory`: Pre-joins the 4-level hierarchy (`Campus → Building → Floor → Room`) and department metadata for unified search and indoor navigation.
-- `vw_public_faculty_directory`: Resolves each public staff member's latest `faculty_availability` record and dynamically evaluates `valid_until < CURRENT_TIMESTAMP` to return `'UNKNOWN'` when stale.
+- `vw_public_faculty_directory`: Resolves each public staff member's official RVCE roster attributes (`qualification`, `cadre_rank`, `program_name`, `leadership_role`, `years_at_rvce`, `association_nature`), latest `faculty_availability` record, and dynamically evaluates `valid_until < CURRENT_TIMESTAMP` or `status = 'ON_LEAVE'` (lien/deputation) to return truthful availability.
+- `vw_department_directory`: Aggregates total listed faculty, awarded `Ph.D` counts, professor counts, mapped spaces, and Head of Department (`hod_name`) per academic/institutional unit.
 - `vw_security_visitor_board`: Denormalized operational view for authorised reception staff with live `TIMESTAMPDIFF` visit duration calculations.
 - `vw_daily_visitor_analytics`: Aggregated daily check-in, active-inside, pending-host-approval, and average-duration metrics per gate and destination building.
 

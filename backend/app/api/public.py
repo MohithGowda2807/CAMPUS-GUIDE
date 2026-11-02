@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import time
 from typing import Any
 
@@ -19,7 +19,7 @@ def _serialize_row(row: Any) -> dict[str, Any]:
     for k, v in dict(row).items():
         if hasattr(v, "__float__") and not isinstance(v, (int, float, bool)):
             out[k] = float(v)
-        elif isinstance(v, datetime):
+        elif isinstance(v, (datetime, date)):
             out[k] = v.isoformat()
         else:
             out[k] = v
@@ -270,16 +270,17 @@ def list_departments(conn: Connection = Depends(get_db_connection)) -> list[dict
     rows = conn.execute(
         text(
             """
-            SELECT d.dept_id, d.dept_code, d.dept_name, d.short_description, d.official_email,
-                   d.verification_status,
-                   COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' THEN s.staff_id END) AS faculty_count,
-                   COUNT(DISTINCT CASE WHEN r.public_visibility = TRUE AND r.status = 'ACTIVE' THEN r.room_id END) AS room_count
-            FROM departments d
-            LEFT JOIN staff s ON s.dept_id = d.dept_id
-            LEFT JOIN rooms r ON r.dept_id = d.dept_id
-            WHERE d.status = 'ACTIVE'
-            GROUP BY d.dept_id, d.dept_code, d.dept_name, d.short_description, d.official_email, d.verification_status
-            ORDER BY d.dept_name ASC
+            SELECT *
+            FROM vw_department_directory
+            ORDER BY
+                CASE dept_category
+                    WHEN 'ENGINEERING' THEN 1
+                    WHEN 'PG_PROGRAMME' THEN 2
+                    WHEN 'BASIC_SCIENCES' THEN 3
+                    WHEN 'CAMPUS_CENTRAL' THEN 4
+                    ELSE 5
+                END,
+                dept_name ASC
             """
         )
     ).mappings().all()
@@ -289,6 +290,14 @@ def list_departments(conn: Connection = Depends(get_db_connection)) -> list[dict
 @router.get("/faculty")
 def list_public_faculty(
     dept_id: int | None = Query(default=None),
+    cadre: str | None = Query(
+        default=None,
+        description="Optional filter: LEADERSHIP, PROFESSOR, ASSOCIATE_PROFESSOR, ASSISTANT_PROFESSOR, VISITING",
+    ),
+    qualification: str | None = Query(
+        default=None,
+        description="Optional filter: PHD, PURSUING_PHD, POSTGRADUATE",
+    ),
     q: str | None = Query(default=None, max_length=100),
     conn: Connection = Depends(get_db_connection),
 ) -> list[dict[str, Any]]:
@@ -297,8 +306,34 @@ def list_public_faculty(
     if dept_id is not None:
         clauses.append("dept_id = :did")
         params["did"] = dept_id
+    if cadre:
+        cadre_norm = cadre.strip().upper()
+        if cadre_norm == "LEADERSHIP":
+            clauses.append("(leadership_role IS NOT NULL OR cadre_rank = 1)")
+        elif cadre_norm == "PROFESSOR":
+            clauses.append("cadre_rank IN (1, 2)")
+        elif cadre_norm == "ASSOCIATE_PROFESSOR":
+            clauses.append("cadre_rank = 3")
+        elif cadre_norm == "ASSISTANT_PROFESSOR":
+            clauses.append("cadre_rank IN (4, 5, 6)")
+        elif cadre_norm == "VISITING":
+            clauses.append("(association_nature IN ('CONTRACT', 'ADJUNCT') OR cadre_rank >= 7)")
+    if qualification:
+        qual_norm = qualification.strip().upper()
+        if qual_norm == "PHD":
+            clauses.append("qualification = 'Ph.D'")
+        elif qual_norm == "PURSUING_PHD":
+            clauses.append("qualification = '(Ph.D)'")
+        elif qual_norm == "POSTGRADUATE":
+            clauses.append("(qualification IS NOT NULL AND qualification NOT IN ('Ph.D', '(Ph.D)'))")
     if q and q.strip():
-        clauses.append("(display_name LIKE :q OR designation LIKE :q OR dept_name LIKE :q OR dept_code LIKE :q)")
+        clauses.append(
+            "("
+            "display_name LIKE :q OR employee_code LIKE :q OR designation LIKE :q "
+            "OR COALESCE(program_name, '') LIKE :q OR COALESCE(leadership_role, '') LIKE :q "
+            "OR dept_name LIKE :q OR dept_code LIKE :q"
+            ")"
+        )
         params["q"] = f"%{q.strip()}%"
 
     rows = conn.execute(
@@ -307,7 +342,17 @@ def list_public_faculty(
             SELECT *
             FROM vw_public_faculty_directory
             WHERE {' AND '.join(clauses)}
-            ORDER BY display_name ASC
+            ORDER BY
+                CASE
+                    WHEN leadership_role = 'Principal' THEN 0
+                    WHEN leadership_role = 'Vice Principal' THEN 1
+                    WHEN leadership_role LIKE '%HOD%' THEN 2
+                    WHEN leadership_role IS NOT NULL THEN 3
+                    ELSE 4
+                END ASC,
+                cadre_rank ASC,
+                COALESCE(date_of_joining, DATE('2099-12-31')) ASC,
+                display_name ASC
             """
         ),
         params,
@@ -426,12 +471,19 @@ async def unified_campus_search(
         staff_rows = conn.execute(
             text(
                 """
-                SELECT staff_id, display_name, designation, dept_code, office_room_id,
+                SELECT staff_id, employee_code, display_name, designation, dept_code,
+                       program_name, leadership_role, office_room_id,
                        office_room_number, floor_id, building_id, building_name,
                        building_latitude, building_longitude, effective_availability, verification_status
                 FROM vw_public_faculty_directory
-                WHERE display_name LIKE :lk OR designation LIKE :lk OR dept_code LIKE :lk
-                LIMIT 10
+                WHERE display_name LIKE :lk
+                   OR employee_code LIKE :lk
+                   OR designation LIKE :lk
+                   OR COALESCE(program_name, '') LIKE :lk
+                   OR COALESCE(leadership_role, '') LIKE :lk
+                   OR dept_code LIKE :lk
+                ORDER BY cadre_rank ASC, display_name ASC
+                LIMIT 12
                 """
             ),
             {"lk": like_param},
@@ -440,7 +492,7 @@ async def unified_campus_search(
             loc_label = (
                 f"{s['building_name']} ({s['office_room_number']})"
                 if s["building_name"] and s["office_room_number"]
-                else s["dept_code"]
+                else f"Dept. of {s['dept_code']} • ID {s['employee_code']}"
             )
             results.append(
                 {

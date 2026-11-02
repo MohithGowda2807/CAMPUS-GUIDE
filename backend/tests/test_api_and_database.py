@@ -71,3 +71,22 @@ def test_live_mongodb_collections_and_geospatial_index() -> None:
     geo_indexes = db.campus_geometries.index_information()
     assert "idx_geo_2dsphere" in geo_indexes
     mclient.close()
+
+
+def test_official_rvce_faculty_directory_and_departments_seeded() -> None:
+    r_depts = client.get("/api/v1/departments")
+    assert r_depts.status_code == 200
+    depts = r_depts.json()
+    assert len(depts) >= 18
+
+    r_fac = client.get("/api/v1/faculty")
+    assert r_fac.status_code == 200
+    fac = r_fac.json()
+    assert len(fac) >= 280
+
+    # Verify Principal Dr. Subramanya K N (ID 5716) is searchable via unified search
+    r_search = client.get("/api/v1/search?q=5716&category=FACULTY")
+    assert r_search.status_code == 200
+    s_data = r_search.json()
+    assert s_data["count"] >= 1
+    assert "Subramanya" in s_data["results"][0]["title"]
