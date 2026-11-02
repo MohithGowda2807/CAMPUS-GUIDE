@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(str(REPO_ROOT / ".env"), str(REPO_ROOT / ".env.example")),
+        env_file=(str(REPO_ROOT / ".env.example"), str(REPO_ROOT / ".env")),
         env_file_encoding="utf-8",
         extra="ignore",
     )
