@@ -1,0 +1,68 @@
+# =============================================================================
+# RVCE Campus Navigator — Git Ignore Rules
+# =============================================================================
+
+# Untracked internal / reference project documents (keep local only)
+/RVCE_Campus_Navigator_PROJECT_CONTEXT.md
+/UI DESIGN.txt
+/ABCHFKYF.pdf
+/ERR_FILE.pdf
+/err_diag.png
+/err_diag.png.mwb
+/WhatsApp Image*.jpeg
+/WhatsApp Image*.jpg
+/WhatsApp Image*.png
+/Logo.png
+
+# Environment & Secrets (NEVER commit credentials)
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+backend/.venv/
+backend/venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database dumps, local uploads & runtime logs
+*.sql.gz
+*.bak
+*.dump
+uploads/
+backend/uploads/*
+!backend/uploads/.gitkeep
+logs/
+*.log
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
