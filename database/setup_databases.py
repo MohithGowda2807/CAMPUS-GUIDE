@@ -116,7 +116,7 @@ def seed_mysql_and_mongo(
     default_password: str,
 ) -> None:
     pwd_hash = bcrypt.hashpw(default_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now()
 
     with conn.cursor() as cur:
         cur.execute("USE campusguide")

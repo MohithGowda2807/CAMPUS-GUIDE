@@ -146,15 +146,20 @@ def update_faculty_availability(
         if target_staff_id == current_user.get("linked_staff_id")
         else "DEPARTMENT_OFFICE"
     )
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    valid_until = now + timedelta(minutes=payload.valid_minutes)
-
     conn.execute(
         text(
             """
             INSERT INTO faculty_availability
             (staff_id, availability_state, source_type, public_note, valid_from, valid_until, updated_by_user_id)
-            VALUES (:sid, :st, :src, :note, :vfrom, :vuntil, :uid)
+            VALUES (
+                :sid,
+                :st,
+                :src,
+                :note,
+                CURRENT_TIMESTAMP,
+                DATE_ADD(CURRENT_TIMESTAMP, INTERVAL :mins MINUTE),
+                :uid
+            )
             """
         ),
         {
@@ -162,16 +167,19 @@ def update_faculty_availability(
             "st": payload.availability_state,
             "src": source_type,
             "note": payload.public_note.strip() if payload.public_note else None,
-            "vfrom": now,
-            "vuntil": valid_until,
+            "mins": payload.valid_minutes,
             "uid": current_user["user_id"],
         },
     )
     conn.commit()
+    exp_val = conn.execute(
+        text("SELECT DATE_ADD(CURRENT_TIMESTAMP, INTERVAL :mins MINUTE)"),
+        {"mins": payload.valid_minutes},
+    ).scalar()
 
     return {
         "staff_id": target_staff_id,
         "availability_state": payload.availability_state,
         "source_type": source_type,
-        "valid_until": valid_until.isoformat(),
+        "valid_until": exp_val.isoformat() if hasattr(exp_val, "isoformat") else str(exp_val),
     }
