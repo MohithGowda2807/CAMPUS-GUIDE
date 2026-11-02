@@ -69,11 +69,20 @@ Detailed schema, stored procedures, triggers, views, and document validators are
 
 ### 1. Clone & Configure Environment
 ```bash
-git clone <REPOSITORY_URL>
-cd rvce-campus-navigator
+git clone https://github.com/MohithGowda2807/CAMPUS-GUIDE.git
+cd CAMPUS-GUIDE
 cp .env.example .env
 ```
-Edit `.env` and set your local `MYSQL_USER`, `MYSQL_PASSWORD`, and a strong `JWT_SECRET_KEY`.
+Create the dedicated application database user in **MySQL Workbench** (or MySQL CLI):
+```sql
+CREATE DATABASE IF NOT EXISTS campusguide CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+SET GLOBAL log_bin_trust_function_creators = 1;
+CREATE USER IF NOT EXISTS 'rvce_app'@'localhost' IDENTIFIED BY 'RvceDb@2026';
+CREATE USER IF NOT EXISTS 'rvce_app'@'127.0.0.1' IDENTIFIED BY 'RvceDb@2026';
+GRANT ALL PRIVILEGES ON campusguide.* TO 'rvce_app'@'localhost', 'rvce_app'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
+Then update `MYSQL_USER=rvce_app`, `MYSQL_PASSWORD=RvceDb@2026`, and a strong `JWT_SECRET_KEY` inside `.env` (or run `.\scripts\setup-local.ps1` on Windows PowerShell).
 
 ### 2. Install Backend Dependencies & Provision Databases
 ```bash
