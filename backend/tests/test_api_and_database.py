@@ -90,3 +90,19 @@ def test_official_rvce_faculty_directory_and_departments_seeded() -> None:
     s_data = r_search.json()
     assert s_data["count"] >= 1
     assert "Subramanya" in s_data["results"][0]["title"]
+
+
+def test_verified_campus_buildings_and_map_geometries() -> None:
+    r_map = client.get("/api/v1/map/config")
+    assert r_map.status_code == 200
+    map_cfg = r_map.json()
+    assert len(map_cfg["geometries"]) >= 29
+
+    r_bldgs = client.get("/api/v1/buildings")
+    assert r_bldgs.status_code == 200
+    bldgs = r_bldgs.json()
+    assert len(bldgs) >= 28
+    codes = {b["building_code"] for b in bldgs}
+    assert {"ADMIN", "CSE", "AIML", "ECE", "EEE", "ETE", "ME", "CV", "BT", "LIB", "AUD-KK"}.issubset(
+        codes
+    )

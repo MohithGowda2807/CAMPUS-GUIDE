@@ -1,0 +1,1820 @@
+{
+  "campus": {
+    "campus_code": "RVCE-MAIN",
+    "campus_name": "R. V. College of Engineering",
+    "address": "RV Vidyaniketan Post, 8th Mile, Mysuru Road, Bengaluru, Karnataka 560059",
+    "center_latitude": 12.92355,
+    "center_longitude": 77.49985,
+    "default_zoom": 17,
+    "osm_way_id": 55685638,
+    "boundary_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            77.49896,
+            12.921231
+          ],
+          [
+            77.499007,
+            12.921229
+          ],
+          [
+            77.499291,
+            12.921247
+          ],
+          [
+            77.499479,
+            12.92132
+          ],
+          [
+            77.500007,
+            12.9217
+          ],
+          [
+            77.500211,
+            12.921883
+          ],
+          [
+            77.500396,
+            12.922012
+          ],
+          [
+            77.500576,
+            12.922066
+          ],
+          [
+            77.500741,
+            12.922009
+          ],
+          [
+            77.502226,
+            12.921283
+          ],
+          [
+            77.502465,
+            12.92073
+          ],
+          [
+            77.502555,
+            12.920682
+          ],
+          [
+            77.502687,
+            12.920742
+          ],
+          [
+            77.502915,
+            12.920909
+          ],
+          [
+            77.503119,
+            12.921238
+          ],
+          [
+            77.50321,
+            12.921479
+          ],
+          [
+            77.503406,
+            12.921997
+          ],
+          [
+            77.503604,
+            12.922742
+          ],
+          [
+            77.503666,
+            12.923134
+          ],
+          [
+            77.503696,
+            12.923487
+          ],
+          [
+            77.503738,
+            12.923754
+          ],
+          [
+            77.503544,
+            12.923874
+          ],
+          [
+            77.503495,
+            12.923958
+          ],
+          [
+            77.502811,
+            12.923304
+          ],
+          [
+            77.501761,
+            12.924236
+          ],
+          [
+            77.500433,
+            12.925342
+          ],
+          [
+            77.49998,
+            12.925718
+          ],
+          [
+            77.499321,
+            12.925116
+          ],
+          [
+            77.498841,
+            12.924678
+          ],
+          [
+            77.498881,
+            12.924638
+          ],
+          [
+            77.497811,
+            12.923618
+          ],
+          [
+            77.497558,
+            12.923368
+          ],
+          [
+            77.498158,
+            12.922333
+          ],
+          [
+            77.498505,
+            12.921909
+          ],
+          [
+            77.498645,
+            12.921721
+          ],
+          [
+            77.498896,
+            12.921377
+          ],
+          [
+            77.49896,
+            12.921231
+          ]
+        ]
+      ]
+    }
+  },
+  "dept_primary_building": {
+    "ASE": "ASE-ISE",
+    "AIML": "AIML",
+    "BT": "BT",
+    "CH": "CH-SCI",
+    "CV": "CV",
+    "CSE": "CSE",
+    "EEE": "EEE",
+    "ECE": "ECE",
+    "EIE": "EEE",
+    "ETE": "ETE",
+    "IEM": "IEM",
+    "ISE": "ASE-ISE",
+    "ME": "ME",
+    "MCA": "CC-HUB",
+    "PHY": "CH-SCI",
+    "CHEM": "CH-SCI",
+    "MATH": "CH-SCI",
+    "SPORTS_LIB": "LIB",
+    "ADMIN": "ADMIN",
+    "SEC": "GATE-MAIN"
+  },
+  "buildings": [
+    {
+      "building_code": "GATE-MAIN",
+      "building_name": "Main Mysuru Road Entrance & Security Gate",
+      "building_type": "SECURITY_GATE",
+      "osm_way_id": 1327820761,
+      "total_floors": 1,
+      "latitude": 12.924631,
+      "longitude": 77.49904,
+      "description": "Primary Mysuru Road campus entrance arch, security check-post, and visitor pass reception counter.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498927,
+              12.924641
+            ],
+            [
+              77.499033,
+              12.924666
+            ],
+            [
+              77.49914,
+              12.924692
+            ],
+            [
+              77.499155,
+              12.924601
+            ],
+            [
+              77.498946,
+              12.924556
+            ],
+            [
+              77.498927,
+              12.924641
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ADMIN",
+      "building_name": "Administrative Block & Placement Office",
+      "building_type": "ADMINISTRATION",
+      "osm_way_id": 133053007,
+      "total_floors": 3,
+      "latitude": 12.92381,
+      "longitude": 77.498751,
+      "description": "Office of the Principal, Vice Principal, Deans, Admissions, Examination Section, and Placement & Training Department.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498431,
+              12.923595
+            ],
+            [
+              77.498492,
+              12.923536
+            ],
+            [
+              77.498592,
+              12.923633
+            ],
+            [
+              77.498728,
+              12.923764
+            ],
+            [
+              77.49875,
+              12.923749
+            ],
+            [
+              77.498814,
+              12.923808
+            ],
+            [
+              77.498867,
+              12.92384
+            ],
+            [
+              77.498828,
+              12.923878
+            ],
+            [
+              77.499025,
+              12.924068
+            ],
+            [
+              77.498973,
+              12.924119
+            ],
+            [
+              77.498766,
+              12.923921
+            ],
+            [
+              77.498431,
+              12.923595
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "CSE",
+      "building_name": "Department of Computer Science & Engineering",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133051269,
+      "total_floors": 3,
+      "latitude": 12.9245,
+      "longitude": 77.500401,
+      "description": "Computer Science & Engineering lecture halls, seminar hall, department office, and faculty cabins.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500235,
+              12.924505
+            ],
+            [
+              77.500301,
+              12.924444
+            ],
+            [
+              77.500472,
+              12.924286
+            ],
+            [
+              77.500659,
+              12.924478
+            ],
+            [
+              77.500422,
+              12.924698
+            ],
+            [
+              77.500315,
+              12.924587
+            ],
+            [
+              77.500235,
+              12.924505
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "CSE-LAB",
+      "building_name": "CSE Computing Laboratories Complex",
+      "building_type": "LABORATORY_COMPLEX",
+      "osm_way_id": 1286468180,
+      "total_floors": 2,
+      "latitude": 12.922773,
+      "longitude": 77.499718,
+      "description": "CS Laboratories 9 & 10, project labs, and postgraduate computing facilities.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499659,
+              12.922895
+            ],
+            [
+              77.499732,
+              12.922833
+            ],
+            [
+              77.499862,
+              12.922722
+            ],
+            [
+              77.499771,
+              12.92262
+            ],
+            [
+              77.499568,
+              12.922793
+            ],
+            [
+              77.499659,
+              12.922895
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "AIML",
+      "building_name": "Department of AI & Machine Learning Block",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 132995521,
+      "total_floors": 4,
+      "latitude": 12.922352,
+      "longitude": 77.49848,
+      "description": "Artificial Intelligence & Machine Learning classrooms, research laboratories, and faculty offices.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498421,
+              12.922559
+            ],
+            [
+              77.49822,
+              12.922313
+            ],
+            [
+              77.498426,
+              12.922135
+            ],
+            [
+              77.498509,
+              12.922219
+            ],
+            [
+              77.498585,
+              12.922224
+            ],
+            [
+              77.498579,
+              12.922418
+            ],
+            [
+              77.49854,
+              12.922418
+            ],
+            [
+              77.498496,
+              12.922418
+            ],
+            [
+              77.498542,
+              12.922467
+            ],
+            [
+              77.498421,
+              12.922559
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ECE",
+      "building_name": "Department of Electronics & Communication Engineering",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133052270,
+      "total_floors": 3,
+      "latitude": 12.923804,
+      "longitude": 77.500092,
+      "description": "ECE lecture halls, VLSI Design, Embedded Systems, Signal Processing laboratories, and faculty cabins.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.49986,
+              12.923704
+            ],
+            [
+              77.500026,
+              12.923544
+            ],
+            [
+              77.500416,
+              12.92393
+            ],
+            [
+              77.50025,
+              12.924089
+            ],
+            [
+              77.499909,
+              12.923752
+            ],
+            [
+              77.49986,
+              12.923704
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "EEE",
+      "building_name": "Electrical & Instrumentation Engineering Block",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133117327,
+      "total_floors": 3,
+      "latitude": 12.9241,
+      "longitude": 77.499919,
+      "description": "Academic block housing Electrical & Electronics Engineering (EEE) and Electronics & Instrumentation Engineering (EIE).",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499712,
+              12.923967
+            ],
+            [
+              77.499885,
+              12.923804
+            ],
+            [
+              77.500222,
+              12.924144
+            ],
+            [
+              77.500106,
+              12.924254
+            ],
+            [
+              77.499964,
+              12.924387
+            ],
+            [
+              77.499627,
+              12.924047
+            ],
+            [
+              77.499712,
+              12.923967
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ETE",
+      "building_name": "Department of Electronics & Telecommunication Engineering",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133259801,
+      "total_floors": 4,
+      "latitude": 12.92359,
+      "longitude": 77.500282,
+      "description": "Telecommunication Engineering lecture halls, RF/Microwave & Digital Communication labs, and faculty offices.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500064,
+              12.923465
+            ],
+            [
+              77.500168,
+              12.923371
+            ],
+            [
+              77.500319,
+              12.923527
+            ],
+            [
+              77.500508,
+              12.923722
+            ],
+            [
+              77.500405,
+              12.923817
+            ],
+            [
+              77.500231,
+              12.923638
+            ],
+            [
+              77.500064,
+              12.923465
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ASE-ISE",
+      "building_name": "Aerospace & Information Science Block",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133052927,
+      "total_floors": 3,
+      "latitude": 12.923031,
+      "longitude": 77.500962,
+      "description": "Academic block housing the Department of Aerospace Engineering and Department of Information Science & Engineering.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500765,
+              12.922835
+            ],
+            [
+              77.500893,
+              12.922638
+            ],
+            [
+              77.501018,
+              12.922716
+            ],
+            [
+              77.501154,
+              12.922721
+            ],
+            [
+              77.501236,
+              12.923117
+            ],
+            [
+              77.501095,
+              12.923302
+            ],
+            [
+              77.500979,
+              12.923264
+            ],
+            [
+              77.500941,
+              12.923267
+            ],
+            [
+              77.500914,
+              12.923269
+            ],
+            [
+              77.500903,
+              12.923201
+            ],
+            [
+              77.50085,
+              12.92317
+            ],
+            [
+              77.500791,
+              12.922872
+            ],
+            [
+              77.500765,
+              12.922835
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ASE-WS",
+      "building_name": "Aerospace Propulsion & Structures Workshop",
+      "building_type": "LABORATORY_COMPLEX",
+      "osm_way_id": 695545713,
+      "total_floors": 2,
+      "latitude": 12.922472,
+      "longitude": 77.500637,
+      "description": "Aerodynamics wind tunnel, propulsion, and aircraft structures laboratory complex.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500442,
+              12.922555
+            ],
+            [
+              77.500585,
+              12.922574
+            ],
+            [
+              77.500844,
+              12.92261
+            ],
+            [
+              77.500875,
+              12.922395
+            ],
+            [
+              77.500606,
+              12.922358
+            ],
+            [
+              77.500473,
+              12.92234
+            ],
+            [
+              77.500442,
+              12.922555
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ME",
+      "building_name": "Department of Mechanical Engineering",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133053079,
+      "total_floors": 3,
+      "latitude": 12.923023,
+      "longitude": 77.498141,
+      "description": "Mechanical Engineering lecture halls, thermal/fluid/manufacturing laboratories, machine shop, and offices.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.497824,
+              12.922967
+            ],
+            [
+              77.498086,
+              12.922709
+            ],
+            [
+              77.49835,
+              12.922965
+            ],
+            [
+              77.498228,
+              12.923085
+            ],
+            [
+              77.498219,
+              12.923094
+            ],
+            [
+              77.498194,
+              12.923119
+            ],
+            [
+              77.498089,
+              12.923222
+            ],
+            [
+              77.497824,
+              12.922967
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "ME-PG",
+      "building_name": "Mechanical PG & Research Block",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133001682,
+      "total_floors": 4,
+      "latitude": 12.923408,
+      "longitude": 77.498343,
+      "description": "Postgraduate Machine Design, Product Design & Manufacturing, and research laboratories.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498202,
+              12.923361
+            ],
+            [
+              77.498272,
+              12.923299
+            ],
+            [
+              77.498331,
+              12.923309
+            ],
+            [
+              77.498503,
+              12.923492
+            ],
+            [
+              77.498406,
+              12.923578
+            ],
+            [
+              77.498202,
+              12.923361
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "CV",
+      "building_name": "Department of Civil Engineering",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133052110,
+      "total_floors": 4,
+      "latitude": 12.924471,
+      "longitude": 77.499553,
+      "description": "Civil, Highway, Structural, Geotechnical, and Environmental Engineering classrooms, labs, and offices.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499308,
+              12.924494
+            ],
+            [
+              77.499473,
+              12.924338
+            ],
+            [
+              77.499642,
+              12.92418
+            ],
+            [
+              77.499905,
+              12.924446
+            ],
+            [
+              77.499571,
+              12.92476
+            ],
+            [
+              77.499421,
+              12.924609
+            ],
+            [
+              77.499308,
+              12.924494
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "CH-SCI",
+      "building_name": "Chemical Engineering & Basic Sciences Block",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 132994721,
+      "total_floors": 3,
+      "latitude": 12.923132,
+      "longitude": 77.500022,
+      "description": "Houses the Department of Chemical Engineering along with Physics, Chemistry, and Mathematics departments.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499707,
+              12.922975
+            ],
+            [
+              77.499968,
+              12.922742
+            ],
+            [
+              77.500311,
+              12.923108
+            ],
+            [
+              77.50018,
+              12.923224
+            ],
+            [
+              77.500097,
+              12.923294
+            ],
+            [
+              77.500045,
+              12.923285
+            ],
+            [
+              77.499995,
+              12.923276
+            ],
+            [
+              77.499876,
+              12.923156
+            ],
+            [
+              77.499707,
+              12.922975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "BT",
+      "building_name": "Department of Biotechnology",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 132995519,
+      "total_floors": 3,
+      "latitude": 12.922377,
+      "longitude": 77.498883,
+      "description": "Biotechnology classrooms, bioprocess, bioinformatics & molecular biology laboratories, and quadrangle.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498744,
+              12.922403
+            ],
+            [
+              77.498782,
+              12.922406
+            ],
+            [
+              77.498776,
+              12.922469
+            ],
+            [
+              77.498817,
+              12.922529
+            ],
+            [
+              77.498858,
+              12.92259
+            ],
+            [
+              77.499146,
+              12.922379
+            ],
+            [
+              77.499034,
+              12.922249
+            ],
+            [
+              77.499042,
+              12.922202
+            ],
+            [
+              77.498752,
+              12.922169
+            ],
+            [
+              77.498744,
+              12.922403
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "IEM",
+      "building_name": "Department of Industrial Engineering & Management",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 133053117,
+      "total_floors": 3,
+      "latitude": 12.922986,
+      "longitude": 77.498745,
+      "description": "Industrial Engineering & Management classrooms, ergonomics/OR labs, and department office.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498547,
+              12.922977
+            ],
+            [
+              77.498758,
+              12.922763
+            ],
+            [
+              77.498906,
+              12.922902
+            ],
+            [
+              77.498963,
+              12.922956
+            ],
+            [
+              77.498752,
+              12.923169
+            ],
+            [
+              77.4987,
+              12.92312
+            ],
+            [
+              77.498586,
+              12.923013
+            ],
+            [
+              77.498547,
+              12.922977
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "CC-HUB",
+      "building_name": "Central Computing Hub & MCA Block",
+      "building_type": "ACADEMIC_BLOCK",
+      "osm_way_id": 1286468181,
+      "total_floors": 2,
+      "latitude": 12.922483,
+      "longitude": 77.499582,
+      "description": "Central computing facility and Master of Computer Applications (MCA) academic spaces.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499533,
+              12.922357
+            ],
+            [
+              77.499455,
+              12.922429
+            ],
+            [
+              77.499631,
+              12.922609
+            ],
+            [
+              77.499709,
+              12.922536
+            ],
+            [
+              77.499533,
+              12.922357
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "LIB",
+      "building_name": "Central Library & Reference Block",
+      "building_type": "LIBRARY",
+      "osm_way_id": 133052402,
+      "total_floors": 4,
+      "latitude": 12.923225,
+      "longitude": 77.500701,
+      "description": "Main institutional library, circulation desk, reference stacks, periodicals, and reading halls.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500611,
+              12.923382
+            ],
+            [
+              77.500541,
+              12.923046
+            ],
+            [
+              77.50077,
+              12.923002
+            ],
+            [
+              77.50084,
+              12.923338
+            ],
+            [
+              77.500742,
+              12.923357
+            ],
+            [
+              77.500611,
+              12.923382
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "LIB-NEW",
+      "building_name": "New Digital Library Complex",
+      "building_type": "LIBRARY",
+      "osm_way_id": 1286468176,
+      "total_floors": 4,
+      "latitude": 12.922574,
+      "longitude": 77.500244,
+      "description": "Digital knowledge centre, e-resources, and collaborative quiet study halls.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500003,
+              12.922693
+            ],
+            [
+              77.500054,
+              12.92254
+            ],
+            [
+              77.500057,
+              12.922453
+            ],
+            [
+              77.500113,
+              12.9224
+            ],
+            [
+              77.50023,
+              12.922293
+            ],
+            [
+              77.500414,
+              12.922426
+            ],
+            [
+              77.500361,
+              12.922637
+            ],
+            [
+              77.500512,
+              12.922689
+            ],
+            [
+              77.500417,
+              12.922825
+            ],
+            [
+              77.500277,
+              12.922781
+            ],
+            [
+              77.500003,
+              12.922693
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "IDRC",
+      "building_name": "Interdisciplinary Research Centre (IDRC)",
+      "building_type": "LABORATORY_COMPLEX",
+      "osm_way_id": 133117326,
+      "total_floors": 3,
+      "latitude": 12.923732,
+      "longitude": 77.501246,
+      "description": "Central interdisciplinary research laboratories and sponsored centres of excellence.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.501119,
+              12.923658
+            ],
+            [
+              77.501145,
+              12.923683
+            ],
+            [
+              77.501109,
+              12.923718
+            ],
+            [
+              77.501188,
+              12.923793
+            ],
+            [
+              77.501262,
+              12.923864
+            ],
+            [
+              77.501295,
+              12.923832
+            ],
+            [
+              77.501324,
+              12.923859
+            ],
+            [
+              77.50139,
+              12.923794
+            ],
+            [
+              77.501362,
+              12.923766
+            ],
+            [
+              77.501392,
+              12.923736
+            ],
+            [
+              77.501236,
+              12.923587
+            ],
+            [
+              77.501199,
+              12.923624
+            ],
+            [
+              77.501176,
+              12.923601
+            ],
+            [
+              77.501119,
+              12.923658
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "INNOV",
+      "building_name": "RVCE Innovation Center",
+      "building_type": "LABORATORY_COMPLEX",
+      "osm_way_id": 1286468183,
+      "total_floors": 6,
+      "latitude": 12.923306,
+      "longitude": 77.498937,
+      "description": "Campus innovation hub, interdisciplinary incubation labs, and technology development centre.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.498391,
+              12.923254
+            ],
+            [
+              77.498787,
+              12.923663
+            ],
+            [
+              77.499152,
+              12.923487
+            ],
+            [
+              77.499397,
+              12.923405
+            ],
+            [
+              77.499396,
+              12.923384
+            ],
+            [
+              77.499,
+              12.922967
+            ],
+            [
+              77.498748,
+              12.923211
+            ],
+            [
+              77.498623,
+              12.92308
+            ],
+            [
+              77.498391,
+              12.923254
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "AUD-KK",
+      "building_name": "Kriya Kalpa Auditorium",
+      "building_type": "AUDITORIUM",
+      "osm_way_id": 133268637,
+      "total_floors": 2,
+      "latitude": 12.923734,
+      "longitude": 77.499524,
+      "description": "Central air-conditioned auditorium for institutional conferences, guest lectures, and academic events.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499232,
+              12.923575
+            ],
+            [
+              77.499461,
+              12.923405
+            ],
+            [
+              77.499698,
+              12.923654
+            ],
+            [
+              77.499826,
+              12.923791
+            ],
+            [
+              77.499612,
+              12.923989
+            ],
+            [
+              77.499573,
+              12.923948
+            ],
+            [
+              77.499429,
+              12.923791
+            ],
+            [
+              77.499363,
+              12.923719
+            ],
+            [
+              77.499232,
+              12.923575
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "GYM",
+      "building_name": "Indoor Gymnatorium & Sports Complex",
+      "building_type": "AMENITIES",
+      "osm_way_id": 1327820775,
+      "total_floors": 4,
+      "latitude": 12.921897,
+      "longitude": 77.499163,
+      "description": "Department of Physical Education, indoor sports arena, fitness facilities, and convocation hall.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.499208,
+              12.9223
+            ],
+            [
+              77.499598,
+              12.92197
+            ],
+            [
+              77.499613,
+              12.921947
+            ],
+            [
+              77.499623,
+              12.921923
+            ],
+            [
+              77.499627,
+              12.921896
+            ],
+            [
+              77.499624,
+              12.921868
+            ],
+            [
+              77.499614,
+              12.921841
+            ],
+            [
+              77.499598,
+              12.921818
+            ],
+            [
+              77.499385,
+              12.921641
+            ],
+            [
+              77.49936,
+              12.921655
+            ],
+            [
+              77.499302,
+              12.921635
+            ],
+            [
+              77.499242,
+              12.921621
+            ],
+            [
+              77.499181,
+              12.921614
+            ],
+            [
+              77.499119,
+              12.921614
+            ],
+            [
+              77.499058,
+              12.921622
+            ],
+            [
+              77.499006,
+              12.921634
+            ],
+            [
+              77.498956,
+              12.921651
+            ],
+            [
+              77.498908,
+              12.921673
+            ],
+            [
+              77.498862,
+              12.9217
+            ],
+            [
+              77.498757,
+              12.92164
+            ],
+            [
+              77.498449,
+              12.922066
+            ],
+            [
+              77.49854,
+              12.922139
+            ],
+            [
+              77.498717,
+              12.922155
+            ],
+            [
+              77.498768,
+              12.922087
+            ],
+            [
+              77.498897,
+              12.9221
+            ],
+            [
+              77.49916,
+              12.922296
+            ],
+            [
+              77.499171,
+              12.922304
+            ],
+            [
+              77.499184,
+              12.922308
+            ],
+            [
+              77.499197,
+              12.922306
+            ],
+            [
+              77.499208,
+              12.9223
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "HEALTH",
+      "building_name": "RVCE Campus Health & Medical Centre",
+      "building_type": "AMENITIES",
+      "osm_way_id": 695545711,
+      "total_floors": 2,
+      "latitude": 12.924659,
+      "longitude": 77.500624,
+      "description": "24x7 campus medical clinic, primary healthcare, ambulance access, and first-aid services.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.500422,
+              12.924698
+            ],
+            [
+              77.500545,
+              12.924584
+            ],
+            [
+              77.500659,
+              12.924478
+            ],
+            [
+              77.500826,
+              12.924649
+            ],
+            [
+              77.500731,
+              12.924737
+            ],
+            [
+              77.500664,
+              12.924668
+            ],
+            [
+              77.500522,
+              12.9248
+            ],
+            [
+              77.500422,
+              12.924698
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "HOSTEL-KR",
+      "building_name": "Krishna Hostel",
+      "building_type": "HOSTEL",
+      "osm_way_id": 133052812,
+      "total_floors": 4,
+      "latitude": 12.924202,
+      "longitude": 77.500784,
+      "description": "On-campus student residential hostel near the central academic zone.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.50077,
+              12.924256
+            ],
+            [
+              77.50092,
+              12.924409
+            ],
+            [
+              77.500884,
+              12.924442
+            ],
+            [
+              77.500843,
+              12.92448
+            ],
+            [
+              77.50048,
+              12.924109
+            ],
+            [
+              77.500575,
+              12.92402
+            ],
+            [
+              77.500729,
+              12.923877
+            ],
+            [
+              77.500942,
+              12.924095
+            ],
+            [
+              77.500909,
+              12.924126
+            ],
+            [
+              77.50077,
+              12.924256
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "HOSTEL-CV",
+      "building_name": "Cauvery Hostel Block",
+      "building_type": "HOSTEL",
+      "osm_way_id": 581289525,
+      "total_floors": 4,
+      "latitude": 12.924146,
+      "longitude": 77.501198,
+      "description": "On-campus student residential block.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.501451,
+              12.924174
+            ],
+            [
+              77.501678,
+              12.923975
+            ],
+            [
+              77.501707,
+              12.924007
+            ],
+            [
+              77.501004,
+              12.924625
+            ],
+            [
+              77.500906,
+              12.924519
+            ],
+            [
+              77.501164,
+              12.924292
+            ],
+            [
+              77.501023,
+              12.924139
+            ],
+            [
+              77.501075,
+              12.924094
+            ],
+            [
+              77.500983,
+              12.923994
+            ],
+            [
+              77.50104,
+              12.923944
+            ],
+            [
+              77.501149,
+              12.923848
+            ],
+            [
+              77.501451,
+              12.924174
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "HOSTEL-CH",
+      "building_name": "Chamundi Hostel",
+      "building_type": "HOSTEL",
+      "osm_way_id": 133052565,
+      "total_floors": 3,
+      "latitude": 12.922089,
+      "longitude": 77.501929,
+      "description": "On-campus student residential block in the southern campus zone.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.50168,
+              12.922061
+            ],
+            [
+              77.501955,
+              12.921845
+            ],
+            [
+              77.502179,
+              12.922116
+            ],
+            [
+              77.501904,
+              12.922332
+            ],
+            [
+              77.50168,
+              12.922061
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "building_code": "HOSTEL-DJ",
+      "building_name": "Diamond Jubilee Hostel",
+      "building_type": "HOSTEL",
+      "osm_way_id": 133052568,
+      "total_floors": 4,
+      "latitude": 12.922979,
+      "longitude": 77.503175,
+      "description": "On-campus student residential block in the eastern campus sector.",
+      "footprint": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              77.502884,
+              12.923009
+            ],
+            [
+              77.502824,
+              12.923008
+            ],
+            [
+              77.502826,
+              12.922928
+            ],
+            [
+              77.502886,
+              12.922929
+            ],
+            [
+              77.502887,
+              12.922866
+            ],
+            [
+              77.503472,
+              12.922876
+            ],
+            [
+              77.50347,
+              12.922945
+            ],
+            [
+              77.503519,
+              12.922946
+            ],
+            [
+              77.503518,
+              12.923034
+            ],
+            [
+              77.503469,
+              12.923033
+            ],
+            [
+              77.503468,
+              12.923091
+            ],
+            [
+              77.502883,
+              12.92308
+            ],
+            [
+              77.502884,
+              12.923009
+            ]
+          ]
+        ]
+      }
+    }
+  ],
+  "facilities": [
+    {
+      "facility_name": "Main Mysuru Road Visitor Reception & Pass Counter",
+      "category": "GATE_RECEPTION",
+      "building_code": "GATE-MAIN",
+      "latitude": 12.924633,
+      "longitude": 77.499021,
+      "opening_hours": "24x7 Security \u2022 Visitor Desk 08:30\u201317:30",
+      "description": "Primary campus entry gate, visitor pass verification, and campus security desk."
+    },
+    {
+      "facility_name": "Pattanagere Metro Station \u2014 Gate A (RVCE Walkway)",
+      "category": "GATE_RECEPTION",
+      "building_code": null,
+      "latitude": 12.924066,
+      "longitude": 77.498248,
+      "opening_hours": "05:00\u201323:30 (Namma Metro Purple Line)",
+      "description": "Direct wheelchair-accessible metro station entrance opposite RVCE Mysuru Road frontage."
+    },
+    {
+      "facility_name": "Kotak Mahindra Bank & Campus ATM",
+      "category": "BANK_ATM",
+      "building_code": null,
+      "latitude": 12.924919,
+      "longitude": 77.499389,
+      "opening_hours": "ATM 24x7 \u2022 Banking Hours Mon\u2013Sat 10:00\u201316:00",
+      "description": "On-campus banking counter and 24-hour ATM near the Mysuru Road entrance."
+    },
+    {
+      "facility_name": "R. V. Vidyanikethan Post Office",
+      "category": "ADMIN_SERVICE",
+      "building_code": null,
+      "latitude": 12.924864,
+      "longitude": 77.499477,
+      "opening_hours": "Mon\u2013Sat: 09:30\u201316:30",
+      "description": "India Post campus sub-post office (PIN 560059) near main entrance."
+    },
+    {
+      "facility_name": "Admissions, Registrar & Student Helpdesk",
+      "category": "ADMIN_SERVICE",
+      "building_code": "ADMIN",
+      "latitude": 12.923577,
+      "longitude": 77.498572,
+      "opening_hours": "Mon\u2013Fri: 09:00\u201316:45 \u2022 Sat: 09:00\u201313:00",
+      "description": "Central administrative enquiry, admissions verification, and academic records section."
+    },
+    {
+      "facility_name": "MM Foods \u2014 Central Campus Cafeteria",
+      "category": "CAFETERIA_FOOD",
+      "building_code": null,
+      "latitude": 12.923364,
+      "longitude": 77.499644,
+      "opening_hours": "Mon\u2013Sat: 08:00\u201319:00",
+      "description": "Main multi-counter campus cafeteria serving meals, refreshments, and beverages."
+    },
+    {
+      "facility_name": "Big Mingos Food Court",
+      "category": "CAFETERIA_FOOD",
+      "building_code": null,
+      "latitude": 12.922401,
+      "longitude": 77.499706,
+      "opening_hours": "Mon\u2013Sat: 08:30\u201318:30",
+      "description": "Campus food court and snack counter near Central Computing Hub and New Library."
+    },
+    {
+      "facility_name": "Main Ground Visitor & Campus Parking",
+      "category": "PARKING",
+      "building_code": null,
+      "latitude": 12.925213,
+      "longitude": 77.499869,
+      "opening_hours": "07:00\u201320:30",
+      "description": "Designated visitor and institutional parking zone inside the Mysuru Road entrance."
+    },
+    {
+      "facility_name": "Administrative Block Visitor Parking",
+      "category": "PARKING",
+      "building_code": null,
+      "latitude": 12.923995,
+      "longitude": 77.498429,
+      "opening_hours": "08:00\u201319:00",
+      "description": "Surface visitor parking adjacent to the Administrative Block."
+    },
+    {
+      "facility_name": "RVCE Medical & First-Aid Clinic",
+      "category": "MEDICAL_FIRST_AID",
+      "building_code": "HEALTH",
+      "latitude": 12.924634,
+      "longitude": 77.500701,
+      "opening_hours": "24x7 Emergency & Clinic",
+      "description": "Campus health centre providing medical consultation, first aid, and emergency support."
+    },
+    {
+      "facility_name": "Central Library Circulation & Reading Hall",
+      "category": "LIBRARY",
+      "building_code": "LIB",
+      "latitude": 12.923225,
+      "longitude": 77.500701,
+      "opening_hours": "Mon\u2013Sat: 08:30\u201320:00",
+      "description": "Main institutional library circulation desk, reference collections, and study zones."
+    },
+    {
+      "facility_name": "Kriya Kalpa Auditorium",
+      "category": "AUDITORIUM_HALL",
+      "building_code": "AUD-KK",
+      "latitude": 12.923734,
+      "longitude": 77.499524,
+      "opening_hours": "Event Scheduled Hours",
+      "description": "Central auditorium near Administrative Block for seminars, orientations, and conferences."
+    }
+  ]
+}

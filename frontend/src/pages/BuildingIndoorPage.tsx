@@ -212,7 +212,10 @@ export function BuildingIndoorPage() {
 
                     <div className="mt-5 pt-3.5 border-t border-[#E2E8F0] flex items-center justify-between gap-2">
                       <span className="text-xs text-[#64748B]">
-                        {b.total_floors} Floors • {b.public_rooms_count} Rooms
+                        {b.total_floors} {b.total_floors === 1 ? 'Floor' : 'Floors'}
+                        {b.public_rooms_count > 0
+                          ? ` • ${b.public_rooms_count} Listed Office${b.public_rooms_count === 1 ? '' : 's'}`
+                          : ''}
                       </span>
                       <div className="flex items-center gap-2">
                         <Link
@@ -286,7 +289,8 @@ export function BuildingIndoorPage() {
                           : 'bg-[#F5F7FA] text-[#202938] hover:bg-[#EDF2FA] hover:text-[#27447E]'
                       }`}
                     >
-                      {fl.floor_name} ({fl.room_count})
+                      {fl.floor_name}
+                      {fl.room_count > 0 ? ` (${fl.room_count})` : ''}
                     </button>
                   );
                 })}

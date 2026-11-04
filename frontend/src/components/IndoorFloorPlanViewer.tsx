@@ -256,15 +256,15 @@ export function IndoorFloorPlanViewer({
               </div>
             </div>
           ) : (
-            <div className="p-10 text-center space-y-2 flex-1 flex flex-col items-center justify-center">
-              <AlertCircle className="w-8 h-8 text-[#64748B]" />
+            <div className="p-10 text-center space-y-2.5 flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] min-h-[280px]">
+              <AlertCircle className="w-7 h-7 text-[#27447E]/70" />
               <div className="text-sm font-semibold text-[#202938]">
-                Approved Indoor Floor Plan Not Yet Published
+                Departmental Floor Layout Pending Upload
               </div>
-              <p className="text-xs text-[#64748B] max-w-md">
-                An approved visual floor plan is not currently available for {data.floor.floor_name}.
-                You can browse all listed rooms on this floor using the searchable directory beside
-                this panel.
+              <p className="text-xs text-[#64748B] max-w-md leading-relaxed">
+                Detailed indoor floor drawings for {data.floor.building_name} ({data.floor.floor_name})
+                will appear here once uploaded. Listed offices and reception desks on this floor are
+                available in the directory panel alongside.
               </p>
             </div>
           )}

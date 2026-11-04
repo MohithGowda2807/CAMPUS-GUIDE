@@ -3,9 +3,9 @@ import L from 'leaflet';
 import { AlertTriangle, Compass, LocateFixed } from 'lucide-react';
 import type { Building, FacilityItem, GeoGeometry } from '../types/campus';
 
-const DEFAULT_RVCE_LAT = 12.923333;
-const DEFAULT_RVCE_LNG = 77.499506;
-const DEFAULT_ZOOM = 18;
+const DEFAULT_RVCE_LAT = 12.92355;
+const DEFAULT_RVCE_LNG = 77.49985;
+const DEFAULT_ZOOM = 17;
 const DEFAULT_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const DEFAULT_ATTRIBUTION =
   "&copy; <a href='https://www.openstreetmap.org/copyright' target='_blank' rel='noopener noreferrer'>OpenStreetMap</a> contributors";
@@ -36,7 +36,7 @@ interface CampusLeafletMapProps {
 
 function createPinIcon(selected: boolean, kind: 'BUILDING' | 'FACILITY'): L.DivIcon {
   const fill = selected ? '#1D3563' : kind === 'BUILDING' ? '#27447E' : '#335C67';
-  const size = selected ? 34 : 26;
+  const size = selected ? 32 : 24;
   const ring = selected
     ? `<circle cx="18" cy="18" r="16" fill="none" stroke="#27447E" stroke-width="2" stroke-opacity="0.35"/>`
     : '';
@@ -76,6 +76,7 @@ export function CampusLeafletMap({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const geoLayerRef = useRef<L.LayerGroup | null>(null);
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
+  const syncedCenterRef = useRef<boolean>(false);
 
   const [tileError, setTileError] = useState(false);
   const [geoNotice, setGeoNotice] = useState<string | null>(null);
@@ -130,48 +131,92 @@ export function CampusLeafletMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Render GeoJSON campus boundary & building footprints
+  // Sync map view once when backend campus center loads if no specific pin is selected
+  useEffect(() => {
+    if (
+      center &&
+      mapRef.current &&
+      !syncedCenterRef.current &&
+      !selectedBuildingId &&
+      !selectedFacilityId
+    ) {
+      syncedCenterRef.current = true;
+      mapRef.current.setView([center.lat, center.lng], center.zoom);
+    }
+  }, [center, selectedBuildingId, selectedFacilityId]);
+
+  // Render verified GeoJSON campus perimeter & clickable building footprints
   useEffect(() => {
     const geoGroup = geoLayerRef.current;
     if (!geoGroup) return;
     geoGroup.clearLayers();
 
+    const buildingById = new Map<number, Building>();
+    for (const b of buildings) {
+      buildingById.set(b.building_id, b);
+    }
+
     for (const item of geometries) {
       if (!item.geometry) continue;
       const isCampus = item.entity_type === 'CAMPUS_BOUNDARY';
+      const matchedBuilding =
+        item.entity_type === 'BUILDING_FOOTPRINT' ? buildingById.get(item.mysql_id) : undefined;
+
+      // When filtering by building category, only draw footprints for visible buildings
+      if (!isCampus && buildings.length > 0 && !matchedBuilding) {
+        continue;
+      }
+
       const isSelectedFootprint =
         item.entity_type === 'BUILDING_FOOTPRINT' && item.mysql_id === selectedBuildingId;
 
       try {
-        L.geoJSON(
+        const layer = L.geoJSON(
           {
             type: 'Feature',
             properties: { name: item.name },
             geometry: item.geometry,
           } as never,
           {
+            interactive: !isCampus && Boolean(matchedBuilding),
             style: () =>
               isCampus
                 ? {
                     color: '#27447E',
                     weight: 2,
-                    dashArray: '6 6',
+                    dashArray: '6 5',
                     fillColor: '#EDF2FA',
-                    fillOpacity: 0.08,
+                    fillOpacity: 0.03,
                   }
                 : {
                     color: isSelectedFootprint ? '#1D3563' : '#27447E',
-                    weight: isSelectedFootprint ? 2.5 : 1.5,
+                    weight: isSelectedFootprint ? 2.5 : 1.25,
                     fillColor: isSelectedFootprint ? '#27447E' : '#3B5998',
-                    fillOpacity: isSelectedFootprint ? 0.28 : 0.14,
+                    fillOpacity: isSelectedFootprint ? 0.28 : 0.08,
                   },
           }
-        ).addTo(geoGroup);
+        );
+
+        if (matchedBuilding) {
+          layer.bindTooltip(
+            `${matchedBuilding.building_name} (${matchedBuilding.building_code})`,
+            {
+              sticky: true,
+              direction: 'top',
+              className: 'rvce-map-tooltip',
+            }
+          );
+          layer.on('click', () => {
+            onSelectBuilding?.(matchedBuilding);
+          });
+        }
+
+        layer.addTo(geoGroup);
       } catch {
         // Ignore malformed geometry
       }
     }
-  }, [geometries, selectedBuildingId]);
+  }, [geometries, buildings, selectedBuildingId, onSelectBuilding]);
 
   // Render Building & Outdoor Facility Markers
   useEffect(() => {
@@ -190,7 +235,7 @@ export function CampusLeafletMap({
 
       marker.bindTooltip(`${bldg.building_name} (${bldg.building_code})`, {
         direction: 'top',
-        offset: [0, -24],
+        offset: [0, -20],
         className: 'rvce-map-tooltip',
       });
 
@@ -220,7 +265,7 @@ export function CampusLeafletMap({
 
       marker.bindTooltip(fac.facility_name, {
         direction: 'top',
-        offset: [0, -22],
+        offset: [0, -20],
         className: 'rvce-map-tooltip',
       });
 

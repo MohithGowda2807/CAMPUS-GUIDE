@@ -161,72 +161,48 @@ def seed_sample_nosql_documents(
     campus_id: int,
     building_map: dict[str, int],
     floor_plan_map: dict[str, dict[str, Any]],
+    osm_campus_payload: dict[str, Any] | None = None,
 ) -> None:
     """
-    Seeds clearly flagged SAMPLE_DEV GeoJSON campus/building footprints and
-    local-coordinate schematic indoor floor-plan overlays so the portal works
-    end-to-end during development prior to official GIS/CAD upload.
+    Seeds verified OpenStreetMap GeoJSON campus perimeter and architectural
+    building footprints into `campus_geometries` (2dsphere indexed), plus any
+    approved indoor floor-plan vector overlays.
     """
     now = datetime.now(timezone.utc)
 
-    # Approximate schematic campus envelope around 12.923333, 77.499506 (tagged SAMPLE_DEV)
-    geometries = [
-        {
-            "entity_type": "CAMPUS_BOUNDARY",
-            "mysql_id": campus_id,
-            "code": "RVCE-MAIN",
-            "name": "RV College of Engineering — Campus Extent (Sample Envelope)",
-            "verification_status": "SAMPLE_DEV",
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [
-                    [
-                        [77.49690, 12.92550],
-                        [77.50210, 12.92550],
-                        [77.50210, 12.92110],
-                        [77.49690, 12.92110],
-                        [77.49690, 12.92550],
-                    ]
-                ],
-            },
-            "updated_at": now,
-        }
-    ]
+    db.campus_geometries.delete_many({})
+    db.floor_plan_overlays.delete_many({})
 
-    footprint_boxes = {
-        "ADMIN": (12.92355, 77.49940, 0.00022, 0.00032),
-        "CSE": (12.92392, 77.49875, 0.00024, 0.00035),
-        "LIB": (12.92310, 77.49985, 0.00022, 0.00028),
-        "ECE": (12.92282, 77.49895, 0.00023, 0.00034),
-        "AUD": (12.92418, 77.50020, 0.00025, 0.00032),
-        "GATE-1": (12.92488, 77.49952, 0.00010, 0.00014),
-    }
+    geometries: list[dict[str, Any]] = []
 
-    for code, b_id in building_map.items():
-        if code in footprint_boxes:
-            lat, lng, dlat, dlng = footprint_boxes[code]
-            geometries.append(
-                {
-                    "entity_type": "BUILDING_FOOTPRINT",
-                    "mysql_id": b_id,
-                    "code": code,
-                    "name": f"{code} Footprint (Sample Schematic)",
-                    "verification_status": "SAMPLE_DEV",
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [
-                            [
-                                [round(lng - dlng, 6), round(lat + dlat, 6)],
-                                [round(lng + dlng, 6), round(lat + dlat, 6)],
-                                [round(lng + dlng, 6), round(lat - dlat, 6)],
-                                [round(lng - dlng, 6), round(lat - dlat, 6)],
-                                [round(lng - dlng, 6), round(lat + dlat, 6)],
-                            ]
-                        ],
-                    },
-                    "updated_at": now,
-                }
-            )
+    if osm_campus_payload:
+        campus_meta = osm_campus_payload["campus"]
+        geometries.append(
+            {
+                "entity_type": "CAMPUS_BOUNDARY",
+                "mysql_id": campus_id,
+                "code": campus_meta["campus_code"],
+                "name": "R. V. College of Engineering — Campus Perimeter",
+                "verification_status": "VERIFIED",
+                "geometry": campus_meta["boundary_geometry"],
+                "updated_at": now,
+            }
+        )
+
+        for b_item in osm_campus_payload["buildings"]:
+            code = b_item["building_code"]
+            if code in building_map:
+                geometries.append(
+                    {
+                        "entity_type": "BUILDING_FOOTPRINT",
+                        "mysql_id": building_map[code],
+                        "code": code,
+                        "name": b_item["building_name"],
+                        "verification_status": "VERIFIED",
+                        "geometry": b_item["footprint"],
+                        "updated_at": now,
+                    }
+                )
 
     for doc in geometries:
         db.campus_geometries.replace_one(

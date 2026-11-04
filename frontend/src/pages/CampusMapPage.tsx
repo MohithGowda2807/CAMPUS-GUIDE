@@ -28,11 +28,14 @@ const RECENT_STORAGE_KEY = 'rvce_recent_destinations';
 const CATEGORY_FILTERS = [
   { code: 'ALL', label: 'All' },
   { code: 'ACADEMIC_BLOCK', label: 'Academic Blocks' },
+  { code: 'LABORATORY_COMPLEX', label: 'Labs & Centres' },
   { code: 'ADMINISTRATION', label: 'Administration' },
-  { code: 'LIBRARY', label: 'Library' },
+  { code: 'LIBRARY', label: 'Libraries' },
   { code: 'AUDITORIUM', label: 'Auditorium' },
-  { code: 'SECURITY_GATE', label: 'Gates & Reception' },
-  { code: 'FACILITIES_ONLY', label: 'Facilities & Amenities' },
+  { code: 'AMENITIES', label: 'Sports & Health' },
+  { code: 'HOSTEL', label: 'Hostels' },
+  { code: 'SECURITY_GATE', label: 'Gates' },
+  { code: 'FACILITIES_ONLY', label: 'Facilities & Parking' },
 ];
 
 export function CampusMapPage() {
@@ -167,6 +170,8 @@ export function CampusMapPage() {
   const handleSelectSearchResult = (item: SearchResultItem) => {
     pushRecent(item);
     if (item.entity_type === 'BUILDING' && item.building_id) {
+      setQuery('');
+      setActiveCategory('ALL');
       setSelectedFacilityId(null);
       setSelectedBuildingId(item.building_id);
       setSearchParams({ building: String(item.building_id) }, { replace: true });
@@ -175,20 +180,26 @@ export function CampusMapPage() {
         `/buildings/${item.building_id}?floor=${item.floor_id ?? ''}&room=${item.room_id ?? ''}`
       );
     } else if (item.entity_type === 'FACULTY') {
-      if (item.building_id && item.floor_id && item.room_id) {
-        navigate(
-          `/buildings/${item.building_id}?floor=${item.floor_id}&room=${item.room_id}`
-        );
+      if (item.building_id) {
+        setQuery('');
+        setActiveCategory('ALL');
+        setSelectedFacilityId(null);
+        setSelectedBuildingId(item.building_id);
+        setSearchParams({ building: String(item.building_id) }, { replace: true });
       } else {
         navigate(`/directory?tab=faculty&q=${encodeURIComponent(item.title)}`);
       }
     } else if (item.entity_type === 'FACILITY') {
+      setQuery('');
       if (item.building_id) {
+        setActiveCategory('ALL');
         setSelectedBuildingId(item.building_id);
         setSelectedFacilityId(null);
+        setSearchParams({ building: String(item.building_id) }, { replace: true });
       } else {
         setSelectedBuildingId(null);
         setSelectedFacilityId(item.id);
+        setSearchParams({ facility: String(item.id) }, { replace: true });
       }
     }
   };
@@ -304,7 +315,9 @@ export function CampusMapPage() {
                             {item.entity_type}
                           </span>
                           <div className="flex items-center gap-1.5">
-                            {item.availability && <AvailabilityBadge state={item.availability} />}
+                            {item.availability && item.availability !== 'UNKNOWN' && (
+                              <AvailabilityBadge state={item.availability} />
+                            )}
                             <VerificationBadge status={item.verification_status} />
                           </div>
                         </div>
@@ -365,14 +378,14 @@ export function CampusMapPage() {
                     )}
                   </div>
 
-                  {/* Primary Action: Open Indoor Floor Plans */}
+                  {/* Primary Action: Open Building & Offices */}
                   <div className="pt-1 flex gap-2">
                     <Link
                       to={`/buildings/${selectedBuildingDetail.building.building_id}`}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#27447E] text-white text-xs font-semibold hover:bg-[#1E3666] transition-colors"
                     >
                       <Layers className="w-4 h-4" />
-                      Open Indoor Floor Plans
+                      View Building &amp; Offices
                     </Link>
                     <button
                       type="button"
@@ -387,7 +400,7 @@ export function CampusMapPage() {
                   {selectedBuildingDetail.floors.length > 0 && (
                     <div className="space-y-2 pt-2 border-t border-[#E2E8F0]">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
-                        Select Floor
+                        Floors
                       </h3>
                       <div className="space-y-1.5">
                         {selectedBuildingDetail.floors.map((fl) => (
@@ -398,7 +411,10 @@ export function CampusMapPage() {
                           >
                             <span className="font-semibold text-[#202938]">{fl.floor_name}</span>
                             <span className="text-[#64748B]">
-                              {fl.room_count} rooms {fl.has_floor_plan ? '• Plan Ready' : ''}
+                              {fl.room_count > 0
+                                ? `${fl.room_count} listed office${fl.room_count === 1 ? '' : 's'}`
+                                : 'View floor'}
+                              {fl.has_floor_plan ? ' • Layout Ready' : ''}
                             </span>
                           </Link>
                         ))}
@@ -532,9 +548,15 @@ export function CampusMapPage() {
                               </span>
                             </div>
                             <div className="text-xs text-[#64748B] mt-0.5 flex items-center gap-2">
-                              <span>{b.total_floors} Floors</span>
+                              <span>
+                                {b.total_floors} {b.total_floors === 1 ? 'Floor' : 'Floors'}
+                              </span>
                               <span>•</span>
-                              <span>{b.public_rooms_count} Listed Rooms</span>
+                              <span>
+                                {b.public_rooms_count > 0
+                                  ? `${b.public_rooms_count} Listed Office${b.public_rooms_count === 1 ? '' : 's'}`
+                                  : b.building_type.replace(/_/g, ' ')}
+                              </span>
                             </div>
                           </div>
                         </button>

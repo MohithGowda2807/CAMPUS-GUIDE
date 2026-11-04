@@ -489,11 +489,12 @@ async def unified_campus_search(
             {"lk": like_param},
         ).mappings().all()
         for s in staff_rows:
-            loc_label = (
-                f"{s['building_name']} ({s['office_room_number']})"
-                if s["building_name"] and s["office_room_number"]
-                else f"Dept. of {s['dept_code']} • ID {s['employee_code']}"
-            )
+            if s["building_name"] and s["office_room_number"]:
+                loc_label = f"{s['building_name']} • {s['office_room_number']}"
+            elif s["building_name"]:
+                loc_label = s["building_name"]
+            else:
+                loc_label = f"Department of {s['dept_code']}"
             results.append(
                 {
                     "entity_type": "FACULTY",

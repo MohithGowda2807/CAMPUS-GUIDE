@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://127.0.0.1:27017"
     MONGODB_DATABASE: str = "campusguide_nosql"
 
-    MAP_DEFAULT_LAT: float = 12.923333
-    MAP_DEFAULT_LNG: float = 77.499506
-    MAP_DEFAULT_ZOOM: int = 18
+    MAP_DEFAULT_LAT: float = 12.923550
+    MAP_DEFAULT_LNG: float = 77.499850
+    MAP_DEFAULT_ZOOM: int = 17
     MAP_TILE_URL: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     MAP_ATTRIBUTION: str = (
         "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"

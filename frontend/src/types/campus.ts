@@ -178,6 +178,9 @@ export interface DepartmentItem {
   short_description: string | null;
   official_email: string | null;
   verification_status: VerificationStatus;
+  primary_building_id?: number | null;
+  primary_building_code?: string | null;
+  primary_building_name?: string | null;
   faculty_count: number;
   phd_completed_count?: number;
   professors_count?: number;

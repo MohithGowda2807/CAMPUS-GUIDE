@@ -105,11 +105,11 @@ SELECT
     r.room_name AS office_room_name,
     f.floor_id,
     f.floor_name,
-    b.building_id,
-    b.building_code,
-    b.building_name,
-    b.latitude AS building_latitude,
-    b.longitude AS building_longitude,
+    COALESCE(b.building_id, db.building_id) AS building_id,
+    COALESCE(b.building_code, db.building_code) AS building_code,
+    COALESCE(b.building_name, db.building_name) AS building_name,
+    COALESCE(b.latitude, db.latitude) AS building_latitude,
+    COALESCE(b.longitude, db.longitude) AS building_longitude,
     CASE
         WHEN s.status = 'ON_LEAVE' THEN 'UNAVAILABLE'
         WHEN fa.availability_id IS NULL THEN 'UNKNOWN'
@@ -130,6 +130,7 @@ SELECT
     fa.last_updated_at AS availability_updated_at
 FROM staff s
 INNER JOIN departments d ON d.dept_id = s.dept_id
+LEFT JOIN buildings db ON db.building_id = d.primary_building_id
 LEFT JOIN rooms r ON r.room_id = s.office_room_id
 LEFT JOIN floors f ON f.floor_id = r.floor_id
 LEFT JOIN buildings b ON b.building_id = f.building_id
@@ -143,7 +144,7 @@ LEFT JOIN faculty_availability fa ON fa.availability_id = (
 WHERE s.profile_visibility = 'PUBLIC'
   AND s.status <> 'INACTIVE';
 
--- 3b. Department Summary View (Aggregates Faculty Qualifications, Cadres & HODs)
+-- 3b. Department Summary View (Aggregates Faculty, HODs & Primary Building Locations)
 CREATE OR REPLACE VIEW vw_department_directory AS
 SELECT
     d.dept_id,
@@ -153,6 +154,9 @@ SELECT
     d.short_description,
     d.official_email,
     d.verification_status,
+    pb.building_id AS primary_building_id,
+    pb.building_code AS primary_building_code,
+    pb.building_name AS primary_building_name,
     COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' THEN s.staff_id END) AS faculty_count,
     COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' AND s.qualification = 'Ph.D' THEN s.staff_id END) AS phd_completed_count,
     COUNT(DISTINCT CASE WHEN s.profile_visibility = 'PUBLIC' AND s.status <> 'INACTIVE' AND s.cadre_rank <= 2 THEN s.staff_id END) AS professors_count,
@@ -167,10 +171,13 @@ SELECT
         LIMIT 1
     ) AS hod_name
 FROM departments d
+LEFT JOIN buildings pb ON pb.building_id = d.primary_building_id
 LEFT JOIN staff s ON s.dept_id = d.dept_id
 LEFT JOIN rooms r ON r.dept_id = d.dept_id
 WHERE d.status = 'ACTIVE'
-GROUP BY d.dept_id, d.dept_code, d.dept_name, d.dept_category, d.short_description, d.official_email, d.verification_status;
+GROUP BY
+    d.dept_id, d.dept_code, d.dept_name, d.dept_category, d.short_description,
+    d.official_email, d.verification_status, pb.building_id, pb.building_code, pb.building_name;
 
 -- 4. Security & Reception Live Visitor Board View
 CREATE OR REPLACE VIEW vw_security_visitor_board AS

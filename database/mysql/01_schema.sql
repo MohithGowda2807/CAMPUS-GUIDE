@@ -25,8 +25,8 @@ DROP TABLE IF EXISTS facilities;
 DROP TABLE IF EXISTS floor_plans;
 DROP TABLE IF EXISTS rooms;
 DROP TABLE IF EXISTS floors;
-DROP TABLE IF EXISTS buildings;
 DROP TABLE IF EXISTS departments;
+DROP TABLE IF EXISTS buildings;
 DROP TABLE IF EXISTS campuses;
 
 SET FOREIGN_KEY_CHECKS = 1;
@@ -53,25 +53,7 @@ CREATE TABLE campuses (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
--- 2. DEPARTMENTS
--- -----------------------------------------------------------------------------
-CREATE TABLE departments (
-    dept_id INT AUTO_INCREMENT PRIMARY KEY,
-    dept_code VARCHAR(20) NOT NULL,
-    dept_name VARCHAR(150) NOT NULL,
-    dept_category ENUM('ENGINEERING', 'PG_PROGRAMME', 'BASIC_SCIENCES', 'CAMPUS_CENTRAL') NOT NULL DEFAULT 'ENGINEERING',
-    short_description VARCHAR(500) NULL,
-    official_email VARCHAR(150) NULL,
-    verification_status ENUM('VERIFIED', 'PENDING_REVIEW', 'SAMPLE_DEV') NOT NULL DEFAULT 'PENDING_REVIEW',
-    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT uq_departments_code UNIQUE (dept_code),
-    CONSTRAINT uq_departments_name UNIQUE (dept_name)
-) ENGINE=InnoDB;
-
--- -----------------------------------------------------------------------------
--- 3. BUILDINGS
+-- 2. BUILDINGS
 -- -----------------------------------------------------------------------------
 CREATE TABLE buildings (
     building_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -105,6 +87,27 @@ CREATE TABLE buildings (
     CONSTRAINT chk_buildings_floors CHECK (total_floors >= 1),
     INDEX idx_buildings_type_status (building_type, status),
     FULLTEXT INDEX ft_buildings_search (building_name, building_code, description)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------------------------
+-- 3. DEPARTMENTS
+-- -----------------------------------------------------------------------------
+CREATE TABLE departments (
+    dept_id INT AUTO_INCREMENT PRIMARY KEY,
+    primary_building_id INT NULL,
+    dept_code VARCHAR(20) NOT NULL,
+    dept_name VARCHAR(150) NOT NULL,
+    dept_category ENUM('ENGINEERING', 'PG_PROGRAMME', 'BASIC_SCIENCES', 'CAMPUS_CENTRAL') NOT NULL DEFAULT 'ENGINEERING',
+    short_description VARCHAR(500) NULL,
+    official_email VARCHAR(150) NULL,
+    verification_status ENUM('VERIFIED', 'PENDING_REVIEW', 'SAMPLE_DEV') NOT NULL DEFAULT 'PENDING_REVIEW',
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_departments_building FOREIGN KEY (primary_building_id)
+        REFERENCES buildings (building_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT uq_departments_code UNIQUE (dept_code),
+    CONSTRAINT uq_departments_name UNIQUE (dept_name)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------

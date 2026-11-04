@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
 from typing import Any
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -10,6 +11,7 @@ from backend.app.config.settings import get_settings
 
 _engine: Engine | None = None
 _mongo_client: AsyncIOMotorClient | None = None
+_mongo_loop: asyncio.AbstractEventLoop | None = None
 
 
 def get_mysql_engine() -> Engine:
@@ -34,13 +36,15 @@ def get_db_connection() -> Generator[Connection, None, None]:
 
 
 def get_mongo_client() -> AsyncIOMotorClient:
-    global _mongo_client
-    if _mongo_client is None:
+    global _mongo_client, _mongo_loop
+    current_loop = asyncio.get_running_loop()
+    if _mongo_client is None or _mongo_loop is not current_loop or _mongo_loop.is_closed():
         settings = get_settings()
         _mongo_client = AsyncIOMotorClient(
             settings.MONGODB_URI,
             serverSelectionTimeoutMS=3000,
         )
+        _mongo_loop = current_loop
     return _mongo_client
 
 
