@@ -46,6 +46,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 *.tsbuildinfo
+*.apk
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

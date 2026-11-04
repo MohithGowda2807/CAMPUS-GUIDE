@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import type {
   AuditLogEntry,
   Building,
@@ -17,18 +18,44 @@ import type {
   VisitRecord,
 } from '../types/campus';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const API_BASE_STORAGE_KEY = 'rvce_api_base_url';
 const TOKEN_STORAGE_KEY = 'rvce_navigator_token';
 
+export function getApiBaseUrl(): string {
+  const custom = localStorage.getItem(API_BASE_STORAGE_KEY);
+  if (custom && custom.trim()) {
+    return custom.trim().replace(/\/+$/, '');
+  }
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '');
+  }
+  if (Capacitor.isNativePlatform()) {
+    // 10.0.2.2 is the Android emulator loopback alias to the host machine.
+    // For a physical phone on campus/local WiFi, set the host LAN IP via setApiBaseUrl().
+    return 'http://10.0.2.2:8000/api/v1';
+  }
+  return '/api/v1';
+}
+
+export function setApiBaseUrl(url: string | null): void {
+  if (url && url.trim()) {
+    localStorage.setItem(API_BASE_STORAGE_KEY, url.trim().replace(/\/+$/, ''));
+  } else {
+    localStorage.removeItem(API_BASE_STORAGE_KEY);
+  }
+}
+
 export function getStoredToken(): string | null {
-  return sessionStorage.getItem(TOKEN_STORAGE_KEY);
+  return sessionStorage.getItem(TOKEN_STORAGE_KEY) || localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 export function setStoredToken(token: string | null): void {
   if (token) {
     sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
   } else {
     sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 }
 
@@ -42,7 +69,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers,
   });
