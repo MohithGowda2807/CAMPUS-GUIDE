@@ -64,12 +64,19 @@ def test_live_mongodb_collections_and_geospatial_index() -> None:
     db = mclient[settings.MONGODB_DATABASE]
 
     collections = set(db.list_collection_names())
-    assert {"campus_geometries", "floor_plan_overlays", "search_telemetry", "system_events"}.issubset(
-        collections
-    )
+    assert {
+        "campus_geometries",
+        "campus_pathways",
+        "floor_plan_overlays",
+        "search_telemetry",
+        "system_events",
+    }.issubset(collections)
 
     geo_indexes = db.campus_geometries.index_information()
     assert "idx_geo_2dsphere" in geo_indexes
+
+    pathway_indexes = db.campus_pathways.index_information()
+    assert "idx_pathway_geo_2dsphere" in pathway_indexes
     mclient.close()
 
 
@@ -106,3 +113,43 @@ def test_verified_campus_buildings_and_map_geometries() -> None:
     assert {"ADMIN", "CSE", "AIML", "ECE", "EEE", "ETE", "ME", "CV", "BT", "LIB", "AUD-KK"}.issubset(
         codes
     )
+
+
+def test_campus_walking_and_vehicle_navigation_routing() -> None:
+    # Main Gate -> Big Mingos Food Court (Walking vs Vehicle)
+    r_walk = client.get(
+        "/api/v1/navigation/route",
+        params={
+            "from_lat": 12.924631,
+            "from_lng": 77.499040,
+            "to_lat": 12.922401,
+            "to_lng": 77.499706,
+            "mode": "WALKING",
+            "from_label": "Main Gate",
+            "to_label": "Big Mingos Food Court",
+        },
+    )
+    assert r_walk.status_code == 200
+    w_data = r_walk.json()
+    assert w_data["mode"] == "WALKING"
+    assert w_data["total_distance_m"] > 200
+    assert w_data["breakdown"]["walkway_distance_m"] > 50
+    assert len(w_data["steps"]) >= 3
+
+    r_veh = client.get(
+        "/api/v1/navigation/route",
+        params={
+            "from_lat": 12.924631,
+            "from_lng": 77.499040,
+            "to_lat": 12.922401,
+            "to_lng": 77.499706,
+            "mode": "VEHICLE",
+            "from_label": "Main Gate",
+            "to_label": "Big Mingos Food Court",
+        },
+    )
+    assert r_veh.status_code == 200
+    v_data = r_veh.json()
+    assert v_data["mode"] == "VEHICLE"
+    assert any(leg["leg_type"] == "DRIVE" for leg in v_data["legs"])
+    assert v_data["breakdown"]["road_distance_m"] > 250

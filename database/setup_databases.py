@@ -510,7 +510,11 @@ def seed_mysql_and_mongo(
         f"and {len(osm_facilities)} campus facilities."
     )
 
-    # Seed MongoDB 9.0 Geospatial Polygons (Campus Perimeter + 28 Building Footprints)
+    # Seed MongoDB 9.0 Geospatial Polygons & Campus Routing Network
+    routing_path = ROOT_DIR / "database" / "seed_data" / "rvce_campus_routing_network.json"
+    routing_payload = (
+        json.loads(routing_path.read_text(encoding="utf-8")) if routing_path.exists() else None
+    )
     mclient = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
     mdb = mclient[mongo_db_name]
     ensure_collections_and_indexes(mdb)
@@ -520,9 +524,10 @@ def seed_mysql_and_mongo(
         building_map=building_map,
         floor_plan_map={},
         osm_campus_payload=osm_payload,
+        routing_payload=routing_payload,
     )
     mclient.close()
-    print(f"[MongoDB] Initialized `{mongo_db_name}` with 29 verified RVCE OpenStreetMap GeoJSON geometries (2dsphere indexed).")
+    print(f"[MongoDB] Initialized `{mongo_db_name}` with verified RVCE GeoJSON geometries & 479 routing pathway segments (2dsphere indexed).")
 
 
 def main() -> None:

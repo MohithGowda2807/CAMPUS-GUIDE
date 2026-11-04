@@ -10,6 +10,7 @@ from sqlalchemy.engine import Connection
 
 from backend.app.config.database import get_db_connection, get_mongo_db
 from backend.app.config.settings import get_settings
+from backend.app.services.routing import compute_campus_route
 
 router = APIRouter(tags=["Public Campus Navigation & Directory"])
 
@@ -563,3 +564,27 @@ async def unified_campus_search(
         pass
 
     return {"query": term, "count": len(results), "duration_ms": elapsed_ms, "results": results}
+
+
+@router.get("/navigation/route")
+async def get_campus_navigation_route(
+    from_lat: float = Query(..., ge=12.90, le=12.95),
+    from_lng: float = Query(..., ge=77.48, le=77.52),
+    to_lat: float = Query(..., ge=12.90, le=12.95),
+    to_lng: float = Query(..., ge=77.48, le=77.52),
+    mode: str = Query(default="WALKING", pattern="^(WALKING|VEHICLE|walking|vehicle)$"),
+    from_label: str = Query(default="Starting Point", max_length=140),
+    to_label: str = Query(default="Destination", max_length=140),
+) -> dict[str, Any]:
+    try:
+        return await compute_campus_route(
+            from_lat=from_lat,
+            from_lng=from_lng,
+            to_lat=to_lat,
+            to_lng=to_lng,
+            mode=mode.upper(),
+            from_label=from_label.strip() or "Starting Point",
+            to_label=to_label.strip() or "Destination",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

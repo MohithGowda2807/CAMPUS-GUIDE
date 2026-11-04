@@ -340,4 +340,54 @@ export interface AuditLogEntry {
   changed_at: string;
 }
 
+export type TravelMode = 'WALKING' | 'VEHICLE';
+
+export interface RouteLeg {
+  leg_type: 'WALK' | 'DRIVE' | 'ACCESS_CONNECTOR';
+  distance_m: number;
+  duration_seconds: number;
+  summary: string;
+  coordinates: [number, number][];
+}
+
+export interface RouteStep {
+  instruction: string;
+  distance_m: number;
+  maneuver:
+    | 'DEPART'
+    | 'CONTINUE'
+    | 'TURN_LEFT'
+    | 'TURN_RIGHT'
+    | 'SLIGHT_LEFT'
+    | 'SLIGHT_RIGHT'
+    | 'DROPOFF_WALK'
+    | 'ARRIVE';
+  path_type: 'ROAD' | 'WALKWAY' | 'STEPS' | 'DESTINATION';
+  lat: number;
+  lng: number;
+}
+
+export interface CampusRouteResponse {
+  mode: TravelMode;
+  from: { label: string; lat: number; lng: number };
+  to: { label: string; lat: number; lng: number };
+  total_distance_m: number;
+  total_duration_seconds: number;
+  uses_steps: boolean;
+  breakdown: {
+    road_distance_m: number;
+    walkway_distance_m: number;
+  };
+  legs: RouteLeg[];
+  steps: RouteStep[];
+}
+
+export interface NavigationPoint {
+  label: string;
+  lat: number;
+  lng: number;
+  source: 'BUILDING' | 'FACILITY' | 'MAP_PIN' | 'GPS';
+  entityId?: number;
+}
+
 type None = null;

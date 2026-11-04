@@ -107,6 +107,39 @@ COLLECTION_VALIDATORS: dict[str, dict[str, Any]] = {
             },
         }
     },
+    "campus_pathways": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "edge_id",
+                "u",
+                "v",
+                "highway",
+                "path_class",
+                "length_m",
+                "geometry",
+            ],
+            "properties": {
+                "edge_id": {"bsonType": "int"},
+                "u": {"bsonType": "string"},
+                "v": {"bsonType": "string"},
+                "highway": {"bsonType": "string"},
+                "path_class": {"enum": ["VEHICLE_AND_WALK", "WALK_ONLY"]},
+                "name": {"bsonType": "string"},
+                "oneway": {"enum": ["yes", "-1", "no"]},
+                "is_steps": {"bsonType": "bool"},
+                "length_m": {"bsonType": ["int", "double"]},
+                "geometry": {
+                    "bsonType": "object",
+                    "required": ["type", "coordinates"],
+                    "properties": {
+                        "type": {"enum": ["LineString"]},
+                        "coordinates": {"bsonType": "array"},
+                    },
+                },
+            },
+        }
+    },
 }
 
 
@@ -129,6 +162,11 @@ def ensure_collections_and_indexes(db: Database) -> None:
         unique=True,
         name="uq_entity_mysql_id",
     )
+
+    # Geospatial 2dsphere index & lookup indexes on campus_pathways (routing graph)
+    db.campus_pathways.create_index([("geometry", GEOSPHERE)], name="idx_pathway_geo_2dsphere")
+    db.campus_pathways.create_index([("edge_id", ASCENDING)], unique=True, name="uq_pathway_edge_id")
+    db.campus_pathways.create_index([("path_class", ASCENDING)], name="idx_pathway_class")
 
     # Indoor floor plan overlay lookup indexes
     db.floor_plan_overlays.create_index(
@@ -156,17 +194,62 @@ def ensure_collections_and_indexes(db: Database) -> None:
     )
 
 
+def seed_routing_pathways(
+    db: Database,
+    routing_payload: dict[str, Any],
+) -> int:
+    """Seeds OpenStreetMap campus roads (VEHICLE_AND_WALK) and footpaths (WALK_ONLY) into MongoDB."""
+    now = datetime.now(timezone.utc)
+    nodes = routing_payload.get("nodes", {})
+    edges = routing_payload.get("edges", [])
+
+    db.campus_pathways.delete_many({})
+    docs: list[dict[str, Any]] = []
+    for edge in edges:
+        u_id = str(edge["u"])
+        v_id = str(edge["v"])
+        u_node = nodes[u_id]
+        v_node = nodes[v_id]
+        docs.append(
+            {
+                "edge_id": int(edge["edge_id"]),
+                "way_id": int(edge.get("way_id", 0)),
+                "u": u_id,
+                "v": v_id,
+                "u_lat": float(u_node["lat"]),
+                "u_lng": float(u_node["lng"]),
+                "v_lat": float(v_node["lat"]),
+                "v_lng": float(v_node["lng"]),
+                "highway": edge["highway"],
+                "path_class": edge["path_class"],
+                "name": edge.get("name", ""),
+                "oneway": edge.get("oneway", "no"),
+                "is_steps": bool(edge.get("is_steps", False)),
+                "length_m": float(edge["length_m"]),
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": edge["coordinates"],
+                },
+                "updated_at": now,
+            }
+        )
+    if docs:
+        db.campus_pathways.insert_many(docs)
+    return len(docs)
+
+
 def seed_sample_nosql_documents(
     db: Database,
     campus_id: int,
     building_map: dict[str, int],
     floor_plan_map: dict[str, dict[str, Any]],
     osm_campus_payload: dict[str, Any] | None = None,
+    routing_payload: dict[str, Any] | None = None,
 ) -> None:
     """
     Seeds verified OpenStreetMap GeoJSON campus perimeter and architectural
-    building footprints into `campus_geometries` (2dsphere indexed), plus any
-    approved indoor floor-plan vector overlays.
+    building footprints into `campus_geometries` (2dsphere indexed), plus
+    campus pathways (`campus_pathways`) and any indoor floor-plan vector overlays.
     """
     now = datetime.now(timezone.utc)
 
@@ -246,11 +329,14 @@ def seed_sample_nosql_documents(
             upsert=True,
         )
 
+    if routing_payload:
+        seed_routing_pathways(db, routing_payload)
+
     db.system_events.insert_one(
         {
             "event_type": "DATABASE_SEED_COMPLETED",
             "component": "database.mongodb.init_nosql",
-            "summary": "Initialized campus_geometries, floor_plan_overlays, and search_telemetry.",
+            "summary": "Initialized campus_geometries, campus_pathways, floor_plan_overlays, and search_telemetry.",
             "created_at": now,
         }
     )

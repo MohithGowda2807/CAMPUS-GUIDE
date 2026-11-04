@@ -2,6 +2,7 @@ import type {
   AuditLogEntry,
   Building,
   BuildingDetailResponse,
+  CampusRouteResponse,
   DepartmentItem,
   FacilityItem,
   FacultyMember,
@@ -10,6 +11,7 @@ import type {
   ReportsSummary,
   RoomItem,
   SearchResponse,
+  TravelMode,
   UserProfile,
   VisitPassReceipt,
   VisitRecord,
@@ -119,6 +121,27 @@ export const campusApi = {
     const sp = new URLSearchParams({ q });
     if (category && category !== 'ALL') sp.set('category', category);
     return request<SearchResponse>(`/search?${sp.toString()}`);
+  },
+
+  getCampusRoute: (params: {
+    from_lat: number;
+    from_lng: number;
+    to_lat: number;
+    to_lng: number;
+    mode: TravelMode;
+    from_label?: string;
+    to_label?: string;
+  }) => {
+    const sp = new URLSearchParams({
+      from_lat: String(params.from_lat),
+      from_lng: String(params.from_lng),
+      to_lat: String(params.to_lat),
+      to_lng: String(params.to_lng),
+      mode: params.mode,
+    });
+    if (params.from_label) sp.set('from_label', params.from_label);
+    if (params.to_label) sp.set('to_label', params.to_label);
+    return request<CampusRouteResponse>(`/navigation/route?${sp.toString()}`);
   },
 
   login: (username: string, password: string) =>

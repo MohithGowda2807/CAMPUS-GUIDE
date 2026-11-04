@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { AlertTriangle, Compass, LocateFixed } from 'lucide-react';
-import type { Building, FacilityItem, GeoGeometry } from '../types/campus';
+import { AlertTriangle, Compass, LocateFixed, MousePointerClick } from 'lucide-react';
+import type {
+  Building,
+  CampusRouteResponse,
+  FacilityItem,
+  GeoGeometry,
+  NavigationPoint,
+} from '../types/campus';
 
 const DEFAULT_RVCE_LAT = 12.92355;
 const DEFAULT_RVCE_LNG = 77.49985;
@@ -28,8 +34,20 @@ interface CampusLeafletMapProps {
   geometries?: GeoGeometry[];
   selectedBuildingId?: number | null;
   selectedFacilityId?: number | null;
+  activeRoute?: CampusRouteResponse | null;
+  originPoint?: NavigationPoint | null;
+  destinationPoint?: NavigationPoint | null;
+  pickingTarget?: 'ORIGIN' | 'DESTINATION' | null;
+  focusedStepCoord?: { lat: number; lng: number } | null;
   onSelectBuilding?: (building: Building) => void;
   onSelectFacility?: (facility: FacilityItem) => void;
+  onPickMapLocation?: (
+    lat: number,
+    lng: number,
+    target: 'ORIGIN' | 'DESTINATION'
+  ) => void;
+  onCancelPicking?: () => void;
+  onUserGpsLocated?: (lat: number, lng: number) => void;
   previewMode?: boolean;
   className?: string;
 }
@@ -57,6 +75,34 @@ function createPinIcon(selected: boolean, kind: 'BUILDING' | 'FACILITY'): L.DivI
   });
 }
 
+function createEndpointIcon(kind: 'ORIGIN' | 'DESTINATION'): L.DivIcon {
+  const bg = kind === 'ORIGIN' ? '#15803D' : '#DC2626';
+  const badge = kind === 'ORIGIN' ? 'A' : 'B';
+  const html = `
+    <div style="
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: ${bg};
+      color: #FFFFFF;
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      font-family: Inter, system-ui, sans-serif;
+    ">${badge}</div>
+  `;
+  return L.divIcon({
+    html,
+    className: 'rvce-endpoint-pin',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
 export function CampusLeafletMap({
   center,
   tileUrl = DEFAULT_TILE_URL,
@@ -66,17 +112,31 @@ export function CampusLeafletMap({
   geometries = [],
   selectedBuildingId = null,
   selectedFacilityId = null,
+  activeRoute = null,
+  originPoint = null,
+  destinationPoint = null,
+  pickingTarget = null,
+  focusedStepCoord = null,
   onSelectBuilding,
   onSelectFacility,
+  onPickMapLocation,
+  onCancelPicking,
+  onUserGpsLocated,
   previewMode = false,
   className = 'h-full w-full',
 }: CampusLeafletMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const geoLayerRef = useRef<L.LayerGroup | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
   const syncedCenterRef = useRef<boolean>(false);
+
+  const pickingTargetRef = useRef(pickingTarget);
+  pickingTargetRef.current = pickingTarget;
+  const onPickMapLocationRef = useRef(onPickMapLocation);
+  onPickMapLocationRef.current = onPickMapLocation;
 
   const [tileError, setTileError] = useState(false);
   const [geoNotice, setGeoNotice] = useState<string | null>(null);
@@ -118,8 +178,60 @@ export function CampusLeafletMap({
     tiles.addTo(map);
 
     geoLayerRef.current = L.layerGroup().addTo(map);
+    routeLayerRef.current = L.layerGroup().addTo(map);
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+
+    if (!previewMode) {
+      map.on('click', (ev: L.LeafletMouseEvent) => {
+        const lat = Number(ev.latlng.lat.toFixed(6));
+        const lng = Number(ev.latlng.lng.toFixed(6));
+
+        if (pickingTargetRef.current && onPickMapLocationRef.current) {
+          onPickMapLocationRef.current(lat, lng, pickingTargetRef.current);
+          return;
+        }
+
+        if (!onPickMapLocationRef.current) return;
+
+        const popupContainer = document.createElement('div');
+        popupContainer.style.fontFamily = 'Inter, system-ui, sans-serif';
+        popupContainer.style.minWidth = '185px';
+        popupContainer.innerHTML = `
+          <div style="font-size:11px;font-weight:600;color:#64748B;margin-bottom:6px;">
+            Selected Campus Spot
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <button type="button" data-nav-action="ORIGIN" style="
+              padding:6px 10px;border-radius:5px;border:1px solid #CBD5E1;
+              background:#F8FAFC;color:#202938;font-size:12px;font-weight:600;
+              cursor:pointer;text-align:left;
+            ">Stand Here (Set Start)</button>
+            <button type="button" data-nav-action="DESTINATION" style="
+              padding:6px 10px;border-radius:5px;border:none;
+              background:#27447E;color:#FFFFFF;font-size:12px;font-weight:600;
+              cursor:pointer;text-align:left;
+            ">Navigate Here</button>
+          </div>
+        `;
+
+        const popup = L.popup({ closeButton: true, offset: [0, -4] })
+          .setLatLng(ev.latlng)
+          .setContent(popupContainer)
+          .openOn(map);
+
+        popupContainer.querySelectorAll('button[data-nav-action]').forEach((btn) => {
+          btn.addEventListener('click', (clickEv) => {
+            clickEv.stopPropagation();
+            const role = (btn as HTMLButtonElement).dataset.navAction as
+              | 'ORIGIN'
+              | 'DESTINATION';
+            map.closePopup(popup);
+            onPickMapLocationRef.current?.(lat, lng, role);
+          });
+        });
+      });
+    }
 
     const resizeTimer = window.setTimeout(() => map.invalidateSize(), 150);
 
@@ -131,19 +243,36 @@ export function CampusLeafletMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync map view once when backend campus center loads if no specific pin is selected
+  // Update map cursor when picking a point on the map
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.style.cursor = pickingTarget ? 'crosshair' : '';
+  }, [pickingTarget]);
+
+  // Sync map view once when backend campus center loads if no specific pin or route is active
   useEffect(() => {
     if (
       center &&
       mapRef.current &&
       !syncedCenterRef.current &&
       !selectedBuildingId &&
-      !selectedFacilityId
+      !selectedFacilityId &&
+      !activeRoute
     ) {
       syncedCenterRef.current = true;
       mapRef.current.setView([center.lat, center.lng], center.zoom);
     }
-  }, [center, selectedBuildingId, selectedFacilityId]);
+  }, [center, selectedBuildingId, selectedFacilityId, activeRoute]);
+
+  // Fly to a specific turn-by-turn step when clicked in the directions list
+  useEffect(() => {
+    if (focusedStepCoord && mapRef.current) {
+      mapRef.current.flyTo([focusedStepCoord.lat, focusedStepCoord.lng], 19, {
+        duration: 0.45,
+      });
+    }
+  }, [focusedStepCoord]);
 
   // Render verified GeoJSON campus perimeter & clickable building footprints
   useEffect(() => {
@@ -162,7 +291,6 @@ export function CampusLeafletMap({
       const matchedBuilding =
         item.entity_type === 'BUILDING_FOOTPRINT' ? buildingById.get(item.mysql_id) : undefined;
 
-      // When filtering by building category, only draw footprints for visible buildings
       if (!isCampus && buildings.length > 0 && !matchedBuilding) {
         continue;
       }
@@ -206,7 +334,8 @@ export function CampusLeafletMap({
               className: 'rvce-map-tooltip',
             }
           );
-          layer.on('click', () => {
+          layer.on('click', (ev: L.LeafletEvent) => {
+            L.DomEvent.stopPropagation(ev);
             onSelectBuilding?.(matchedBuilding);
           });
         }
@@ -217,6 +346,107 @@ export function CampusLeafletMap({
       }
     }
   }, [geometries, buildings, selectedBuildingId, onSelectBuilding]);
+
+  // Render Active Campus Navigation Route + Origin (A) / Destination (B) Pins
+  useEffect(() => {
+    const rLayer = routeLayerRef.current;
+    const map = mapRef.current;
+    if (!rLayer || !map) return;
+
+    rLayer.clearLayers();
+    const boundsPoints: L.LatLngExpression[] = [];
+
+    if (activeRoute) {
+      for (const leg of activeRoute.legs) {
+        if (!leg.coordinates || leg.coordinates.length < 2) continue;
+        for (const pt of leg.coordinates) {
+          boundsPoints.push([pt[0], pt[1]]);
+        }
+
+        if (leg.leg_type === 'DRIVE') {
+          // Vehicle Road Casing + Solid Primary Line
+          L.polyline(leg.coordinates, {
+            color: '#FFFFFF',
+            weight: 9,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          }).addTo(rLayer);
+
+          L.polyline(leg.coordinates, {
+            color: '#1D4ED8',
+            weight: 5.5,
+            opacity: 0.96,
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          }).addTo(rLayer);
+        } else if (leg.leg_type === 'WALK') {
+          // Pedestrian Walkway Halo + High-Contrast Dashed Walking Line
+          L.polyline(leg.coordinates, {
+            color: '#FFFFFF',
+            weight: 8,
+            opacity: 0.94,
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          }).addTo(rLayer);
+
+          L.polyline(leg.coordinates, {
+            color: '#0284C7',
+            weight: 5,
+            opacity: 0.98,
+            dashArray: '8 9',
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          }).addTo(rLayer);
+        } else {
+          // Short Entrance / Access Connector
+          L.polyline(leg.coordinates, {
+            color: '#475569',
+            weight: 3.5,
+            opacity: 0.85,
+            dashArray: '3 7',
+            lineCap: 'round',
+            interactive: false,
+          }).addTo(rLayer);
+        }
+      }
+    }
+
+    if (originPoint) {
+      const mOrigin = L.marker([originPoint.lat, originPoint.lng], {
+        icon: createEndpointIcon('ORIGIN'),
+        zIndexOffset: 1100,
+      }).bindTooltip(`Start: ${originPoint.label}`, {
+        direction: 'top',
+        offset: [0, -14],
+        className: 'rvce-map-tooltip',
+      });
+      mOrigin.addTo(rLayer);
+      boundsPoints.push([originPoint.lat, originPoint.lng]);
+    }
+
+    if (destinationPoint) {
+      const mDest = L.marker([destinationPoint.lat, destinationPoint.lng], {
+        icon: createEndpointIcon('DESTINATION'),
+        zIndexOffset: 1120,
+      }).bindTooltip(`Destination: ${destinationPoint.label}`, {
+        direction: 'top',
+        offset: [0, -14],
+        className: 'rvce-map-tooltip',
+      });
+      mDest.addTo(rLayer);
+      boundsPoints.push([destinationPoint.lat, destinationPoint.lng]);
+    }
+
+    if (activeRoute && boundsPoints.length >= 2) {
+      const bounds = L.latLngBounds(boundsPoints);
+      map.fitBounds(bounds, { padding: [54, 54], maxZoom: 18 });
+    }
+  }, [activeRoute, originPoint, destinationPoint]);
 
   // Render Building & Outdoor Facility Markers
   useEffect(() => {
@@ -245,7 +475,7 @@ export function CampusLeafletMap({
 
       marker.addTo(layer);
 
-      if (isSelected) {
+      if (isSelected && !activeRoute) {
         map.flyTo([bldg.latitude, bldg.longitude], Math.max(map.getZoom(), 18), {
           duration: 0.55,
         });
@@ -254,7 +484,6 @@ export function CampusLeafletMap({
 
     for (const fac of facilities) {
       if (fac.latitude === null || fac.longitude === null) continue;
-      // Avoid overlapping pin if facility sits inside an already rendered building unless selected
       if (fac.building_id && fac.facility_id !== selectedFacilityId) continue;
 
       const isSelected = fac.facility_id === selectedFacilityId;
@@ -275,7 +504,7 @@ export function CampusLeafletMap({
 
       marker.addTo(layer);
 
-      if (isSelected) {
+      if (isSelected && !activeRoute) {
         map.flyTo([fac.latitude, fac.longitude], Math.max(map.getZoom(), 18), {
           duration: 0.55,
         });
@@ -286,6 +515,7 @@ export function CampusLeafletMap({
     facilities,
     selectedBuildingId,
     selectedFacilityId,
+    activeRoute,
     onSelectBuilding,
     onSelectFacility,
   ]);
@@ -319,10 +549,11 @@ export function CampusLeafletMap({
           .addTo(mapRef.current);
 
         mapRef.current.flyTo([latitude, longitude], 18, { duration: 0.6 });
+        onUserGpsLocated?.(latitude, longitude);
       },
       () => {
         setGeoNotice(
-          'Location permission was declined or unavailable. You can continue browsing the campus map normally.'
+          'Location permission was declined or unavailable. You can click anywhere on the campus map to set your starting spot.'
         );
       },
       { enableHighAccuracy: true, timeout: 8000 }
@@ -332,6 +563,26 @@ export function CampusLeafletMap({
   return (
     <div className={`relative ${className}`}>
       <div ref={containerRef} className="h-full w-full z-0" />
+
+      {/* Active Map Point-Picking Banner */}
+      {pickingTarget && !previewMode && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[550] bg-[#202938] text-white px-4 py-2 rounded-full shadow-md text-xs font-semibold flex items-center gap-2.5">
+          <MousePointerClick className="w-4 h-4 text-sky-300 shrink-0" />
+          <span>
+            Click anywhere on the campus map (or select a building) to set{' '}
+            {pickingTarget === 'ORIGIN' ? 'your Starting Spot' : 'your Destination'}
+          </span>
+          {onCancelPicking && (
+            <button
+              type="button"
+              onClick={onCancelPicking}
+              className="ml-1 px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 text-[11px] cursor-pointer"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Map Floating Controls (Reset to Campus + Optional Device Location) */}
       {!previewMode && (
@@ -357,13 +608,41 @@ export function CampusLeafletMap({
         </div>
       )}
 
+      {/* Route Legend Pill when Active Route is Drawn */}
+      {activeRoute && !previewMode && (
+        <div className="absolute bottom-7 left-3 z-[500] bg-white/95 backdrop-blur-xs border border-[#E2E8F0] rounded-md px-3 py-2 shadow-sm flex flex-wrap items-center gap-3 text-[11px] font-medium text-[#202938]">
+          {activeRoute.mode === 'VEHICLE' && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-5 h-1.5 rounded-full bg-[#1D4ED8] inline-block" />
+              Vehicle Road
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-5 border-t-2 border-dashed border-[#0284C7] inline-block" />
+            Walking Path
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3.5 h-3.5 rounded-full bg-[#15803D] text-white text-[9px] font-bold inline-flex items-center justify-center">
+              A
+            </span>
+            Start
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3.5 h-3.5 rounded-full bg-[#DC2626] text-white text-[9px] font-bold inline-flex items-center justify-center">
+              B
+            </span>
+            Destination
+          </span>
+        </div>
+      )}
+
       {/* Tile Provider Offline / Fallback Banner */}
       {tileError && (
         <div className="absolute top-3 left-3 right-36 z-[500] bg-amber-50 border border-amber-200 rounded-md px-3.5 py-2 text-xs text-amber-900 flex items-center gap-2 shadow-sm">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
             Outdoor map tiles are temporarily unreachable. Campus directory search, building pins,
-            and indoor floor plans remain available.
+            and routing remain available.
           </span>
         </div>
       )}
