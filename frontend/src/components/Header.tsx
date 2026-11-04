@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -12,6 +12,12 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import {
+  getConnectionState,
+  subscribeConnectionState,
+  type ConnectionState,
+} from '../services/api';
+import { ServerSettingsModal } from './ServerSettingsModal';
 
 interface HeaderProps {
   compact?: boolean;
@@ -28,8 +34,14 @@ const NAV_ITEMS = [
 
 export function Header({ compact = false }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [connState, setConnState] = useState<ConnectionState>(getConnectionState());
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    return subscribeConnectionState(setConnState);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -115,50 +127,82 @@ export function Header({ compact = false }: HeaderProps) {
             ))}
           </nav>
 
-          {/* Staff Portal / Login Controls */}
-          <div className="hidden lg:flex items-center gap-2.5 shrink-0">
-            {user ? (
-              <>
-                <Link
-                  to="/portal"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-semibold bg-[#27447E] text-white hover:bg-[#1E3666] transition-colors"
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Staff Portal
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  title={`Sign out (${user.username})`}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-[#E2E8F0] text-[#202938] hover:bg-[#F5F7FA] transition-colors cursor-pointer"
-                >
-                  <LogOut className="w-4 h-4 text-[#64748B]" />
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-semibold border border-[#27447E] text-[#27447E] hover:bg-[#EDF2FA] transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                Staff Login
-              </Link>
-            )}
-          </div>
+          {/* Connection Status Pill & Staff Portal / Login Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Server Connection Badge */}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                connState === 'ONLINE'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+              }`}
+              title="Click to check or change backend connection settings"
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  connState === 'ONLINE' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {connState === 'ONLINE' ? 'Server Online' : 'Offline Cache'}
+              </span>
+              <span className="sm:hidden">
+                {connState === 'ONLINE' ? 'Live' : 'Offline'}
+              </span>
+            </button>
 
-          {/* Mobile Menu Toggle */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen((prev) => !prev)}
-            className="lg:hidden inline-flex items-center justify-center p-2 rounded-md text-[#202938] hover:bg-[#F5F7FA] border border-[#E2E8F0]"
-            aria-expanded={mobileOpen}
-            aria-label="Toggle navigation menu"
-          >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+            <div className="hidden lg:flex items-center gap-2.5">
+              {user ? (
+                <>
+                  <Link
+                    to="/portal"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-semibold bg-[#27447E] text-white hover:bg-[#1E3666] transition-colors"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Staff Portal
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    title={`Sign out (${user.username})`}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium border border-[#E2E8F0] text-[#202938] hover:bg-[#F5F7FA] transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 text-[#64748B]" />
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-semibold border border-[#27447E] text-[#27447E] hover:bg-[#EDF2FA] transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Staff Login
+                </Link>
+              )}
+            </div>
+
+            {/* Mobile Menu Toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen((prev) => !prev)}
+              className="lg:hidden inline-flex items-center justify-center p-2 rounded-md text-[#202938] hover:bg-[#F5F7FA] border border-[#E2E8F0]"
+              aria-expanded={mobileOpen}
+              aria-label="Toggle navigation menu"
+            >
+              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Backend Settings Dialog */}
+      <ServerSettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       {/* Mobile Collapsible Menu */}
       {mobileOpen && (

@@ -12,14 +12,25 @@ import type {
   ReportsSummary,
   RoomItem,
   SearchResponse,
+  SearchResultItem,
   TravelMode,
   UserProfile,
   VisitPassReceipt,
   VisitRecord,
 } from '../types/campus';
+import {
+  FALLBACK_BUILDINGS,
+  FALLBACK_DEPARTMENTS,
+  FALLBACK_FACILITIES,
+  FALLBACK_FACULTY,
+  FALLBACK_MAP_CONFIG,
+} from '../data/fallbackData';
 
 const API_BASE_STORAGE_KEY = 'rvce_api_base_url';
 const TOKEN_STORAGE_KEY = 'rvce_navigator_token';
+
+// Default remote cloud tunnel URL if configured (can be overridden anytime in the app UI)
+export const DEFAULT_REMOTE_TUNNEL_URL = 'https://rvce-campus.trycloudflare.com/api/v1';
 
 export function getApiBaseUrl(): string {
   const custom = localStorage.getItem(API_BASE_STORAGE_KEY);
@@ -30,16 +41,19 @@ export function getApiBaseUrl(): string {
     return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '');
   }
   if (Capacitor.isNativePlatform()) {
-    // 10.0.2.2 is the Android emulator loopback alias to the host machine.
-    // For a physical phone on campus/local WiFi, set the host LAN IP via setApiBaseUrl().
-    return 'http://10.0.2.2:8000/api/v1';
+    // Check if the user previously set a custom URL or fall back to local LAN IP or loopback
+    return 'http://192.168.1.7:8000/api/v1';
   }
   return '/api/v1';
 }
 
 export function setApiBaseUrl(url: string | null): void {
   if (url && url.trim()) {
-    localStorage.setItem(API_BASE_STORAGE_KEY, url.trim().replace(/\/+$/, ''));
+    let clean = url.trim().replace(/\/+$/, '');
+    if (!clean.endsWith('/api/v1') && !clean.includes('/api/v1')) {
+      clean = `${clean}/api/v1`;
+    }
+    localStorage.setItem(API_BASE_STORAGE_KEY, clean);
   } else {
     localStorage.removeItem(API_BASE_STORAGE_KEY);
   }
@@ -59,7 +73,38 @@ export function setStoredToken(token: string | null): void {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// Global server connection status for UI badge
+export type ConnectionState = 'ONLINE' | 'OFFLINE_CACHE' | 'CHECKING';
+let currentConnectionState: ConnectionState = 'CHECKING';
+const connectionListeners: Array<(state: ConnectionState) => void> = [];
+
+export function getConnectionState(): ConnectionState {
+  return currentConnectionState;
+}
+
+export function subscribeConnectionState(listener: (state: ConnectionState) => void): () => void {
+  connectionListeners.push(listener);
+  listener(currentConnectionState);
+  return () => {
+    const idx = connectionListeners.indexOf(listener);
+    if (idx >= 0) connectionListeners.splice(idx, 1);
+  };
+}
+
+function setConnectionState(newState: ConnectionState) {
+  if (currentConnectionState !== newState) {
+    currentConnectionState = newState;
+    for (const cb of connectionListeners) {
+      try {
+        cb(newState);
+      } catch {
+        // Ignore subscriber errors
+      }
+    }
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit, timeoutMs = 6000): Promise<T> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -70,49 +115,139 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    let detail = `Request failed (${res.status})`;
-    try {
-      const errBody = await res.json();
-      if (typeof errBody.detail === 'string') {
-        detail = errBody.detail;
-      } else if (Array.isArray(errBody.detail) && errBody.detail.length > 0) {
-        detail = errBody.detail[0]?.msg || detail;
+  try {
+    const res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      let detail = `Request failed (${res.status})`;
+      try {
+        const errBody = await res.json();
+        if (typeof errBody.detail === 'string') {
+          detail = errBody.detail;
+        } else if (Array.isArray(errBody.detail) && errBody.detail.length > 0) {
+          detail = errBody.detail[0]?.msg || detail;
+        }
+      } catch {
+        // Fallback to status text
       }
-    } catch {
-      // Fallback to status text
+      throw new Error(detail);
     }
-    throw new Error(detail);
-  }
 
-  return (await res.json()) as T;
+    setConnectionState('ONLINE');
+    return (await res.json()) as T;
+  } catch (err: unknown) {
+    clearTimeout(timer);
+    setConnectionState('OFFLINE_CACHE');
+    throw err;
+  }
+}
+
+// Distance helper in meters (Haversine)
+function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // metres
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(R * c);
 }
 
 export const campusApi = {
-  getHealth: () =>
-    request<{
-      healthy: boolean;
-      mysql: { connected: boolean; detail: string };
-      mongodb: { connected: boolean; detail: string };
-    }>('/health'),
-
-  getMapConfig: () => request<MapConfigResponse>('/map/config'),
-
-  getBuildings: (params?: { building_type?: string; q?: string }) => {
-    const sp = new URLSearchParams();
-    if (params?.building_type) sp.set('building_type', params.building_type);
-    if (params?.q) sp.set('q', params.q);
-    const qs = sp.toString();
-    return request<Building[]>(`/buildings${qs ? `?${qs}` : ''}`);
+  getHealth: async () => {
+    try {
+      const data = await request<{
+        healthy: boolean;
+        mysql: { connected: boolean; detail: string };
+        mongodb: { connected: boolean; detail: string };
+      }>('/health', undefined, 4000);
+      setConnectionState('ONLINE');
+      return data;
+    } catch {
+      setConnectionState('OFFLINE_CACHE');
+      return {
+        healthy: false,
+        mysql: { connected: false, detail: 'Offline / local cache active' },
+        mongodb: { connected: false, detail: 'Offline / local cache active' },
+      };
+    }
   },
 
-  getBuildingDetail: (buildingId: number) =>
-    request<BuildingDetailResponse>(`/buildings/${buildingId}`),
+  getMapConfig: async (): Promise<MapConfigResponse> => {
+    try {
+      return await request<MapConfigResponse>('/map/config', undefined, 4000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; using bundled campus GIS polygons & boundary.');
+      return FALLBACK_MAP_CONFIG;
+    }
+  },
+
+  getBuildings: async (params?: { building_type?: string; q?: string }): Promise<Building[]> => {
+    try {
+      const sp = new URLSearchParams();
+      if (params?.building_type) sp.set('building_type', params.building_type);
+      if (params?.q) sp.set('q', params.q);
+      const qs = sp.toString();
+      return await request<Building[]>(`/buildings${qs ? `?${qs}` : ''}`, undefined, 4000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; serving bundled building directory.');
+      let res = [...FALLBACK_BUILDINGS];
+      if (params?.building_type) {
+        res = res.filter((b) => b.building_type === params.building_type);
+      }
+      if (params?.q) {
+        const q = params.q.toLowerCase();
+        res = res.filter(
+          (b) =>
+            b.building_name.toLowerCase().includes(q) ||
+            b.building_code.toLowerCase().includes(q) ||
+            (b.description && b.description.toLowerCase().includes(q))
+        );
+      }
+      return res;
+    }
+  },
+
+  getBuildingDetail: async (buildingId: number): Promise<BuildingDetailResponse> => {
+    try {
+      return await request<BuildingDetailResponse>(`/buildings/${buildingId}`, undefined, 4000);
+    } catch {
+      console.info(`[CampusApi] Backend unreachable; loading fallback for building ${buildingId}`);
+      const b = FALLBACK_BUILDINGS.find((x) => x.building_id === buildingId) || FALLBACK_BUILDINGS[0];
+      const geom = FALLBACK_MAP_CONFIG.geometries.find((g) => g.mysql_id === buildingId) || null;
+      const facilities = FALLBACK_FACILITIES.filter((f) => f.building_id === buildingId);
+
+      return {
+        building: b,
+        floors: [
+          {
+            floor_id: b.building_id * 10 + 1,
+            floor_number: 0,
+            floor_name: 'Ground Floor',
+            display_order: 1,
+            has_lift_access: b.is_accessible,
+            room_count: b.public_rooms_count,
+            has_floor_plan: false,
+          },
+        ],
+        facilities,
+        footprint: geom,
+      };
+    }
+  },
 
   getFloorPlan: (floorId: number) =>
     request<FloorPlanResponse>(`/floors/${floorId}/floor-plan`),
@@ -120,38 +255,172 @@ export const campusApi = {
   getRoomDetail: (roomId: number) =>
     request<{ room: RoomItem; occupants: FacultyMember[] }>(`/rooms/${roomId}`),
 
-  getDepartments: () => request<DepartmentItem[]>('/departments'),
+  getDepartments: async (): Promise<DepartmentItem[]> => {
+    try {
+      return await request<DepartmentItem[]>('/departments', undefined, 4000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; serving bundled department catalogue.');
+      return FALLBACK_DEPARTMENTS;
+    }
+  },
 
-  getFaculty: (params?: {
+  getFaculty: async (params?: {
     dept_id?: number;
     cadre?: string;
     qualification?: string;
     q?: string;
-  }) => {
-    const sp = new URLSearchParams();
-    if (params?.dept_id !== undefined) sp.set('dept_id', String(params.dept_id));
-    if (params?.cadre) sp.set('cadre', params.cadre);
-    if (params?.qualification) sp.set('qualification', params.qualification);
-    if (params?.q) sp.set('q', params.q);
-    const qs = sp.toString();
-    return request<FacultyMember[]>(`/faculty${qs ? `?${qs}` : ''}`);
+  }): Promise<FacultyMember[]> => {
+    try {
+      const sp = new URLSearchParams();
+      if (params?.dept_id !== undefined) sp.set('dept_id', String(params.dept_id));
+      if (params?.cadre) sp.set('cadre', params.cadre);
+      if (params?.qualification) sp.set('qualification', params.qualification);
+      if (params?.q) sp.set('q', params.q);
+      const qs = sp.toString();
+      return await request<FacultyMember[]>(`/faculty${qs ? `?${qs}` : ''}`, undefined, 4000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; serving bundled faculty list (339 profiles).');
+      let list = [...FALLBACK_FACULTY];
+      if (params?.dept_id !== undefined) {
+        list = list.filter((f) => f.dept_id === params.dept_id);
+      }
+      if (params?.cadre) {
+        list = list.filter((f) => f.designation.toLowerCase().includes(params.cadre!.toLowerCase()));
+      }
+      if (params?.qualification) {
+        list = list.filter((f) => f.qualification === params.qualification);
+      }
+      if (params?.q) {
+        const q = params.q.toLowerCase();
+        list = list.filter(
+          (f) =>
+            f.display_name.toLowerCase().includes(q) ||
+            f.employee_code.toLowerCase().includes(q) ||
+            f.dept_name.toLowerCase().includes(q) ||
+            f.designation.toLowerCase().includes(q)
+        );
+      }
+      return list;
+    }
   },
 
-  getFacilities: (params?: { category?: string; q?: string }) => {
-    const sp = new URLSearchParams();
-    if (params?.category) sp.set('category', params.category);
-    if (params?.q) sp.set('q', params.q);
-    const qs = sp.toString();
-    return request<FacilityItem[]>(`/facilities${qs ? `?${qs}` : ''}`);
+  getFacilities: async (params?: { category?: string; q?: string }): Promise<FacilityItem[]> => {
+    try {
+      const sp = new URLSearchParams();
+      if (params?.category) sp.set('category', params.category);
+      if (params?.q) sp.set('q', params.q);
+      const qs = sp.toString();
+      return await request<FacilityItem[]>(`/facilities${qs ? `?${qs}` : ''}`, undefined, 4000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; serving bundled facilities.');
+      let res = [...FALLBACK_FACILITIES];
+      if (params?.category && params.category !== 'ALL') {
+        res = res.filter((f) => f.category === params.category);
+      }
+      if (params?.q) {
+        const q = params.q.toLowerCase();
+        res = res.filter(
+          (f) =>
+            f.facility_name.toLowerCase().includes(q) ||
+            (f.description && f.description.toLowerCase().includes(q))
+        );
+      }
+      return res;
+    }
   },
 
-  search: (q: string, category?: string) => {
-    const sp = new URLSearchParams({ q });
-    if (category && category !== 'ALL') sp.set('category', category);
-    return request<SearchResponse>(`/search?${sp.toString()}`);
+  search: async (q: string, category?: string): Promise<SearchResponse> => {
+    try {
+      const sp = new URLSearchParams({ q });
+      if (category && category !== 'ALL') sp.set('category', category);
+      return await request<SearchResponse>(`/search?${sp.toString()}`, undefined, 4000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; running offline campus search.');
+      const queryLower = q.toLowerCase();
+      const results: SearchResultItem[] = [];
+
+      // Buildings
+      if (!category || category === 'ALL' || category === 'BUILDING') {
+        for (const b of FALLBACK_BUILDINGS) {
+          if (
+            b.building_name.toLowerCase().includes(queryLower) ||
+            b.building_code.toLowerCase().includes(queryLower) ||
+            (b.description && b.description.toLowerCase().includes(queryLower))
+          ) {
+            results.push({
+              entity_type: 'BUILDING',
+              id: b.building_id,
+              title: b.building_name,
+              subtitle: `${b.building_code} • ${b.building_type.replace(/_/g, ' ')}`,
+              building_id: b.building_id,
+              floor_id: null,
+              room_id: null,
+              latitude: b.latitude,
+              longitude: b.longitude,
+              verification_status: b.verification_status,
+            });
+          }
+        }
+      }
+
+      // Facilities
+      if (!category || category === 'ALL' || category === 'FACILITY') {
+        for (const f of FALLBACK_FACILITIES) {
+          if (
+            f.facility_name.toLowerCase().includes(queryLower) ||
+            (f.description && f.description.toLowerCase().includes(queryLower))
+          ) {
+            results.push({
+              entity_type: 'FACILITY',
+              id: f.facility_id,
+              title: f.facility_name,
+              subtitle: `${f.category.replace(/_/g, ' ')}${f.building_name ? ` • ${f.building_name}` : ''}`,
+              building_id: f.building_id,
+              floor_id: f.floor_id,
+              room_id: f.room_id,
+              latitude: f.latitude,
+              longitude: f.longitude,
+              verification_status: f.verification_status,
+            });
+          }
+        }
+      }
+
+      // Faculty
+      if (!category || category === 'ALL' || category === 'FACULTY') {
+        for (const faculty of FALLBACK_FACULTY) {
+          if (
+            faculty.display_name.toLowerCase().includes(queryLower) ||
+            faculty.employee_code.toLowerCase().includes(queryLower) ||
+            faculty.dept_name.toLowerCase().includes(queryLower)
+          ) {
+            results.push({
+              entity_type: 'FACULTY',
+              id: faculty.staff_id,
+              title: faculty.display_name,
+              subtitle: `${faculty.designation} • ${faculty.dept_code}${faculty.building_name ? ` • ${faculty.building_name}` : ''}`,
+              building_id: faculty.building_id,
+              floor_id: faculty.floor_id,
+              room_id: faculty.office_room_id,
+              latitude: faculty.building_latitude,
+              longitude: faculty.building_longitude,
+              availability: faculty.effective_availability,
+              verification_status: faculty.verification_status,
+            });
+          }
+        }
+      }
+
+      return {
+        query: q,
+        count: results.length,
+        duration_ms: 1,
+        results: results.slice(0, 30),
+      };
+    }
   },
 
-  getCampusRoute: (params: {
+  getCampusRoute: async (params: {
     from_lat: number;
     from_lng: number;
     to_lat: number;
@@ -159,17 +428,80 @@ export const campusApi = {
     mode: TravelMode;
     from_label?: string;
     to_label?: string;
-  }) => {
-    const sp = new URLSearchParams({
-      from_lat: String(params.from_lat),
-      from_lng: String(params.from_lng),
-      to_lat: String(params.to_lat),
-      to_lng: String(params.to_lng),
-      mode: params.mode,
-    });
-    if (params.from_label) sp.set('from_label', params.from_label);
-    if (params.to_label) sp.set('to_label', params.to_label);
-    return request<CampusRouteResponse>(`/navigation/route?${sp.toString()}`);
+  }): Promise<CampusRouteResponse> => {
+    try {
+      const sp = new URLSearchParams({
+        from_lat: String(params.from_lat),
+        from_lng: String(params.from_lng),
+        to_lat: String(params.to_lat),
+        to_lng: String(params.to_lng),
+        mode: params.mode,
+      });
+      if (params.from_label) sp.set('from_label', params.from_label);
+      if (params.to_label) sp.set('to_label', params.to_label);
+      return await request<CampusRouteResponse>(`/navigation/route?${sp.toString()}`, undefined, 5000);
+    } catch {
+      console.info('[CampusApi] Backend unreachable; generating direct campus path.');
+      const dist = calculateDistanceMeters(
+        params.from_lat,
+        params.from_lng,
+        params.to_lat,
+        params.to_lng
+      );
+      const isVehicle = params.mode === 'VEHICLE';
+      const durationSec = Math.max(30, Math.round(dist / (isVehicle ? 8.33 : 1.33)));
+
+      return {
+        mode: params.mode,
+        from: {
+          label: params.from_label || 'Current Location',
+          lat: params.from_lat,
+          lng: params.from_lng,
+        },
+        to: {
+          label: params.to_label || 'Destination',
+          lat: params.to_lat,
+          lng: params.to_lng,
+        },
+        total_distance_m: dist,
+        total_duration_seconds: durationSec,
+        uses_steps: false,
+        breakdown: {
+          road_distance_m: isVehicle ? dist : 0,
+          walkway_distance_m: isVehicle ? 0 : dist,
+        },
+        legs: [
+          {
+            leg_type: isVehicle ? 'DRIVE' : 'WALK',
+            distance_m: dist,
+            duration_seconds: durationSec,
+            summary: `Direct route to ${params.to_label || 'destination'}`,
+            coordinates: [
+              [params.from_lat, params.from_lng],
+              [params.to_lat, params.to_lng],
+            ],
+          },
+        ],
+        steps: [
+          {
+            instruction: `Head towards ${params.to_label || 'destination'} along campus pathway`,
+            distance_m: dist,
+            maneuver: 'DEPART',
+            path_type: isVehicle ? 'ROAD' : 'WALKWAY',
+            lat: params.from_lat,
+            lng: params.from_lng,
+          },
+          {
+            instruction: `Arrive at ${params.to_label || 'destination'}`,
+            distance_m: 0,
+            maneuver: 'ARRIVE',
+            path_type: 'DESTINATION',
+            lat: params.to_lat,
+            lng: params.to_lng,
+          },
+        ],
+      };
+    }
   },
 
   login: (username: string, password: string) =>

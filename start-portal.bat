@@ -47,11 +47,11 @@ if errorlevel 1 (
     echo [OK] MongoDB service is running.
 )
 
-:: 3. Start FastAPI Backend on 127.0.0.1:8000 (skip if already listening)
+:: 3. Start FastAPI Backend on 0.0.0.0:8000 (accessible on local PC, LAN, and mobile)
 netstat -ano | findstr ":8000 " | findstr "LISTENING" >nul 2>&1
 if errorlevel 1 (
-    echo [START] Launching FastAPI Backend on http://127.0.0.1:8000 ...
-    start "RVCE Portal - Backend API (8000)" cmd /k "cd /d "%~dp0" && backend\.venv\Scripts\uvicorn.exe backend.app.main:app --host 127.0.0.1 --port 8000 --reload"
+    echo [START] Launching FastAPI Backend on http://0.0.0.0:8000 ...
+    start "RVCE Portal - Backend API (8000)" cmd /k "cd /d "%~dp0" && backend\.venv\Scripts\uvicorn.exe backend.app.main:app --host 0.0.0.0 --port 8000 --reload"
 ) else (
     echo [OK] FastAPI Backend is already running on port 8000.
 )
