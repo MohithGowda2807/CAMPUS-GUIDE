@@ -99,19 +99,22 @@ backend/.venv/bin/python database/setup_databases.py --seed
 > Note: `--seed` loads clearly badged `SAMPLE_DEV` development records. Use `--schema-only` in staging/production prior to importing verified RVCE estate records.
 
 ### 3. Start Backend & Frontend Servers
-Run in two terminals from the repository root:
 
+**One-Click Launch on Windows:**
+Double-click `start-portal.bat` in the repository root (checks `MySQL80` & `MongoDB` services, starts FastAPI on `127.0.0.1:8000` and Vite on `127.0.0.1:5173` without duplicate port conflicts, and opens `http://127.0.0.1:5173` in your browser). Use `stop-portal.bat` anytime to stop both dev servers.
+
+**Manual Terminal Launch:**
 ```bash
 # Terminal 1 — FastAPI Backend (http://127.0.0.1:8000)
-backend\.venv\Scripts\uvicorn backend.app.main:app --reload --port 8000
+backend\.venv\Scripts\uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 
-# Terminal 2 — React Frontend (http://localhost:5173)
+# Terminal 2 — React Frontend (http://127.0.0.1:5173)
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open `http://localhost:5173` in your browser. Interactive OpenAPI documentation is served at `http://127.0.0.1:8000/docs`.
+Open `http://127.0.0.1:5173` in your browser. Interactive OpenAPI documentation is served at `http://127.0.0.1:8000/api/docs`.
 
 ---
 
