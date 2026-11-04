@@ -18,6 +18,7 @@ import type {
   VisitPassReceipt,
   VisitRecord,
 } from '../types/campus';
+import { computeCampusRouteOffline } from './campusRouter';
 import {
   FALLBACK_BUILDINGS,
   FALLBACK_DEPARTMENTS,
@@ -104,6 +105,15 @@ function setConnectionState(newState: ConnectionState) {
   }
 }
 
+export class ApiHttpError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit, timeoutMs = 6000): Promise<T> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
@@ -138,32 +148,18 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 6000): P
       } catch {
         // Fallback to status text
       }
-      throw new Error(detail);
+      // The server answered, so we are online even though this request failed.
+      setConnectionState('ONLINE');
+      throw new ApiHttpError(detail, res.status);
     }
 
     setConnectionState('ONLINE');
     return (await res.json()) as T;
   } catch (err: unknown) {
     clearTimeout(timer);
-    setConnectionState('OFFLINE_CACHE');
+    if (!(err instanceof ApiHttpError)) setConnectionState('OFFLINE_CACHE');
     throw err;
   }
-}
-
-// Distance helper in meters (Haversine)
-function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3; // metres
-  const phi1 = (lat1 * Math.PI) / 180;
-  const phi2 = (lat2 * Math.PI) / 180;
-  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
-  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return Math.round(R * c);
 }
 
 export const campusApi = {
@@ -232,17 +228,8 @@ export const campusApi = {
 
       return {
         building: b,
-        floors: [
-          {
-            floor_id: b.building_id * 10 + 1,
-            floor_number: 0,
-            floor_name: 'Ground Floor',
-            display_order: 1,
-            has_lift_access: b.is_accessible,
-            room_count: b.public_rooms_count,
-            has_floor_plan: false,
-          },
-        ],
+        // Indoor floor data requires the server; never invent floors or rooms offline.
+        floors: [],
         facilities,
         footprint: geom,
       };
@@ -351,7 +338,7 @@ export const campusApi = {
               entity_type: 'BUILDING',
               id: b.building_id,
               title: b.building_name,
-              subtitle: `${b.building_code} • ${b.building_type.replace(/_/g, ' ')}`,
+              subtitle: `${b.building_code} â€¢ ${b.building_type.replace(/_/g, ' ')}`,
               building_id: b.building_id,
               floor_id: null,
               room_id: null,
@@ -374,7 +361,7 @@ export const campusApi = {
               entity_type: 'FACILITY',
               id: f.facility_id,
               title: f.facility_name,
-              subtitle: `${f.category.replace(/_/g, ' ')}${f.building_name ? ` • ${f.building_name}` : ''}`,
+              subtitle: `${f.category.replace(/_/g, ' ')}${f.building_name ? ` â€¢ ${f.building_name}` : ''}`,
               building_id: f.building_id,
               floor_id: f.floor_id,
               room_id: f.room_id,
@@ -398,7 +385,7 @@ export const campusApi = {
               entity_type: 'FACULTY',
               id: faculty.staff_id,
               title: faculty.display_name,
-              subtitle: `${faculty.designation} • ${faculty.dept_code}${faculty.building_name ? ` • ${faculty.building_name}` : ''}`,
+              subtitle: `${faculty.designation} â€¢ ${faculty.dept_code}${faculty.building_name ? ` â€¢ ${faculty.building_name}` : ''}`,
               building_id: faculty.building_id,
               floor_id: faculty.floor_id,
               room_id: faculty.office_room_id,
@@ -440,67 +427,19 @@ export const campusApi = {
       if (params.from_label) sp.set('from_label', params.from_label);
       if (params.to_label) sp.set('to_label', params.to_label);
       return await request<CampusRouteResponse>(`/navigation/route?${sp.toString()}`, undefined, 5000);
-    } catch {
-      console.info('[CampusApi] Backend unreachable; generating direct campus path.');
-      const dist = calculateDistanceMeters(
-        params.from_lat,
-        params.from_lng,
-        params.to_lat,
-        params.to_lng
-      );
-      const isVehicle = params.mode === 'VEHICLE';
-      const durationSec = Math.max(30, Math.round(dist / (isVehicle ? 8.33 : 1.33)));
-
-      return {
+    } catch (err) {
+      // Server answered with an HTTP error: surface it, never fabricate a route.
+      if (err instanceof ApiHttpError) throw err;
+      console.info('[CampusApi] Backend unreachable; routing on-device over the bundled campus pathway network.');
+      return computeCampusRouteOffline({
+        fromLat: params.from_lat,
+        fromLng: params.from_lng,
+        toLat: params.to_lat,
+        toLng: params.to_lng,
         mode: params.mode,
-        from: {
-          label: params.from_label || 'Current Location',
-          lat: params.from_lat,
-          lng: params.from_lng,
-        },
-        to: {
-          label: params.to_label || 'Destination',
-          lat: params.to_lat,
-          lng: params.to_lng,
-        },
-        total_distance_m: dist,
-        total_duration_seconds: durationSec,
-        uses_steps: false,
-        breakdown: {
-          road_distance_m: isVehicle ? dist : 0,
-          walkway_distance_m: isVehicle ? 0 : dist,
-        },
-        legs: [
-          {
-            leg_type: isVehicle ? 'DRIVE' : 'WALK',
-            distance_m: dist,
-            duration_seconds: durationSec,
-            summary: `Direct route to ${params.to_label || 'destination'}`,
-            coordinates: [
-              [params.from_lat, params.from_lng],
-              [params.to_lat, params.to_lng],
-            ],
-          },
-        ],
-        steps: [
-          {
-            instruction: `Head towards ${params.to_label || 'destination'} along campus pathway`,
-            distance_m: dist,
-            maneuver: 'DEPART',
-            path_type: isVehicle ? 'ROAD' : 'WALKWAY',
-            lat: params.from_lat,
-            lng: params.from_lng,
-          },
-          {
-            instruction: `Arrive at ${params.to_label || 'destination'}`,
-            distance_m: 0,
-            maneuver: 'ARRIVE',
-            path_type: 'DESTINATION',
-            lat: params.to_lat,
-            lng: params.to_lng,
-          },
-        ],
-      };
+        fromLabel: params.from_label,
+        toLabel: params.to_label,
+      });
     }
   },
 
