@@ -7,9 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from backend.app.auth.security import hash_password, require_roles
+from backend.app.auth.data_protection import normalize_and_validate_rvce_email
+from backend.app.auth.security import require_roles
 from backend.app.config.database import get_db_connection, get_mongo_db
 from backend.app.schemas.domain import (
+    AdminAccountDecisionRequest,
+    AdminAllowlistCreateRequest,
     BuildingCreateUpdateRequest,
     FacilityCreateUpdateRequest,
     FloorCreateRequest,
@@ -508,23 +511,41 @@ async def get_operational_reports(
 
 @router.get("/users")
 def list_system_users(
-    current_user: dict[str, Any] = Depends(require_roles("SYSTEM_ADMIN")),
+    approval_status: str | None = Query(default=None),
+    current_user: dict[str, Any] = Depends(require_roles("ADMIN", "SYSTEM_ADMIN")),
     conn: Connection = Depends(get_db_connection),
 ) -> list[dict[str, Any]]:
+    clauses = ["1=1"]
+    params: dict[str, Any] = {}
+    if approval_status:
+        clauses.append("u.approval_status = :ast")
+        params["ast"] = approval_status.strip().upper()
+
     rows = conn.execute(
         text(
-            """
-            SELECT u.user_id, u.username, u.email, u.auth_provider, u.is_active, u.last_login_at,
-                   s.display_name AS staff_name,
+            f"""
+            SELECT u.user_id, u.cognito_sub, u.username, u.email, u.full_name,
+                   u.auth_provider, u.email_verified, u.mfa_enabled,
+                   u.approval_status, u.status_reason, u.is_active,
+                   u.approved_at, u.last_login_at, u.created_at,
+                   u.linked_staff_id, s.display_name AS staff_name, s.employee_code,
                    GROUP_CONCAT(r.role_code ORDER BY r.role_code SEPARATOR ',') AS role_codes
             FROM users u
             LEFT JOIN staff s ON s.staff_id = u.linked_staff_id
             LEFT JOIN user_roles ur ON ur.user_id = u.user_id
             LEFT JOIN roles r ON r.role_id = ur.role_id
-            GROUP BY u.user_id, u.username, u.email, u.auth_provider, u.is_active, u.last_login_at, s.display_name
-            ORDER BY u.user_id ASC
+            WHERE {' AND '.join(clauses)}
+            GROUP BY u.user_id, u.cognito_sub, u.username, u.email, u.full_name,
+                     u.auth_provider, u.email_verified, u.mfa_enabled,
+                     u.approval_status, u.status_reason, u.is_active,
+                     u.approved_at, u.last_login_at, u.created_at,
+                     u.linked_staff_id, s.display_name, s.employee_code
+            ORDER BY
+                CASE WHEN u.approval_status = 'PENDING_APPROVAL' THEN 0 ELSE 1 END ASC,
+                u.created_at DESC
             """
-        )
+        ),
+        params,
     ).mappings().all()
 
     out = []
@@ -538,22 +559,31 @@ def list_system_users(
 @router.post("/users", status_code=status.HTTP_201_CREATED)
 def create_system_user(
     payload: UserCreateRequest,
-    current_user: dict[str, Any] = Depends(require_roles("SYSTEM_ADMIN")),
+    current_user: dict[str, Any] = Depends(require_roles("ADMIN", "SYSTEM_ADMIN")),
     conn: Connection = Depends(get_db_connection),
 ) -> dict[str, Any]:
-    pwd_hash = hash_password(payload.password)
+    norm_email = normalize_and_validate_rvce_email(payload.email)
     res = conn.execute(
         text(
             """
-            INSERT INTO users (linked_staff_id, username, email, password_hash, auth_provider, is_active)
-            VALUES (:sid, :uname, :email, :phash, 'LOCAL', TRUE)
+            INSERT INTO users
+            (cognito_sub, linked_staff_id, username, email, full_name, auth_provider,
+             email_verified, approval_status, approved_by_user_id, approved_at,
+             tokens_valid_after, is_active)
+            VALUES (
+                :csub, :sid, :uname, :email, :fname, 'COGNITO_OIDC',
+                TRUE, 'APPROVED', :actor, CURRENT_TIMESTAMP,
+                DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 SECOND), TRUE
+            )
             """
         ),
         {
+            "csub": payload.cognito_sub.strip(),
             "sid": payload.linked_staff_id,
             "uname": payload.username.strip(),
-            "email": str(payload.email),
-            "phash": pwd_hash,
+            "email": norm_email,
+            "fname": payload.full_name.strip(),
+            "actor": current_user["user_id"],
         },
     )
     new_uid = int(res.lastrowid)
@@ -572,13 +602,242 @@ def create_system_user(
         text(
             """
             INSERT INTO change_audit_log (user_id, action_type, table_name, record_id, new_value)
-            VALUES (:actor, 'INSERT', 'users', :target, JSON_OBJECT('username', :uname))
+            VALUES (:actor, 'INSERT', 'users', :target, JSON_OBJECT('username', :uname, 'email', :em))
             """
         ),
-        {"actor": current_user["user_id"], "target": new_uid, "uname": payload.username.strip()},
+        {
+            "actor": current_user["user_id"],
+            "target": new_uid,
+            "uname": payload.username.strip(),
+            "em": norm_email,
+        },
     )
     conn.commit()
     return {"user_id": new_uid, "username": payload.username.strip(), "roles": payload.role_codes}
+
+
+# -----------------------------------------------------------------------------
+# Administrator Staff Eligibility Allowlist & Account Approval / Revocation
+# -----------------------------------------------------------------------------
+@router.get("/allowlist")
+def list_staff_allowlist(
+    current_user: dict[str, Any] = Depends(require_roles("ADMIN", "SYSTEM_ADMIN")),
+    conn: Connection = Depends(get_db_connection),
+) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        text(
+            """
+            SELECT a.allowlist_id, a.email, a.linked_staff_id, a.assigned_role_code,
+                   a.is_active, a.notes, a.created_at,
+                   s.display_name AS staff_name, s.employee_code, d.dept_code
+            FROM staff_eligibility_allowlist a
+            LEFT JOIN staff s ON s.staff_id = a.linked_staff_id
+            LEFT JOIN departments d ON d.dept_id = s.dept_id
+            ORDER BY a.allowlist_id DESC
+            """
+        )
+    ).mappings().all()
+    return [_row_to_dict(r) for r in rows]
+
+
+@router.post("/allowlist", status_code=status.HTTP_201_CREATED)
+def add_staff_allowlist_entry(
+    payload: AdminAllowlistCreateRequest,
+    current_user: dict[str, Any] = Depends(require_roles("ADMIN", "SYSTEM_ADMIN")),
+    conn: Connection = Depends(get_db_connection),
+) -> dict[str, Any]:
+    norm_email = normalize_and_validate_rvce_email(payload.email)
+
+    if payload.linked_staff_id is not None:
+        staff_ok = conn.execute(
+            text("SELECT 1 FROM staff WHERE staff_id = :sid LIMIT 1"),
+            {"sid": payload.linked_staff_id},
+        ).scalar()
+        if not staff_ok:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Referenced staff_id does not exist in the verified RVCE staff roster.",
+            )
+
+    res = conn.execute(
+        text(
+            """
+            INSERT INTO staff_eligibility_allowlist
+            (email, linked_staff_id, assigned_role_code, is_active, added_by_user_id, notes)
+            VALUES (:em, :sid, :rc, TRUE, :actor, :notes)
+            """
+        ),
+        {
+            "em": norm_email,
+            "sid": payload.linked_staff_id,
+            "rc": payload.assigned_role_code,
+            "actor": current_user["user_id"],
+            "notes": payload.notes.strip() if payload.notes else None,
+        },
+    )
+    al_id = int(res.lastrowid)
+    conn.execute(
+        text(
+            """
+            INSERT INTO change_audit_log (user_id, action_type, table_name, record_id, new_value)
+            VALUES (
+                :actor, 'INSERT', 'staff_eligibility_allowlist', :alid,
+                JSON_OBJECT('email', :em, 'assigned_role_code', :rc, 'linked_staff_id', :sid)
+            )
+            """
+        ),
+        {
+            "actor": current_user["user_id"],
+            "alid": al_id,
+            "em": norm_email,
+            "rc": payload.assigned_role_code,
+            "sid": payload.linked_staff_id,
+        },
+    )
+    conn.commit()
+    return {
+        "allowlist_id": al_id,
+        "email": norm_email,
+        "linked_staff_id": payload.linked_staff_id,
+        "assigned_role_code": payload.assigned_role_code,
+        "is_active": True,
+    }
+
+
+@router.delete("/allowlist/{allowlist_id}")
+def deactivate_allowlist_entry(
+    allowlist_id: int,
+    current_user: dict[str, Any] = Depends(require_roles("ADMIN", "SYSTEM_ADMIN")),
+    conn: Connection = Depends(get_db_connection),
+) -> dict[str, Any]:
+    res = conn.execute(
+        text("UPDATE staff_eligibility_allowlist SET is_active = FALSE WHERE allowlist_id = :aid"),
+        {"aid": allowlist_id},
+    )
+    if res.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Allowlist entry not found.")
+    conn.execute(
+        text(
+            """
+            INSERT INTO change_audit_log (user_id, action_type, table_name, record_id, new_value)
+            VALUES (:actor, 'STATE_TRANSITION', 'staff_eligibility_allowlist', :aid, JSON_OBJECT('is_active', FALSE))
+            """
+        ),
+        {"actor": current_user["user_id"], "aid": allowlist_id},
+    )
+    conn.commit()
+    return {"allowlist_id": allowlist_id, "is_active": False}
+
+
+@router.post("/accounts/{target_user_id}/decision")
+def decide_staff_account_status(
+    target_user_id: int,
+    payload: AdminAccountDecisionRequest,
+    current_user: dict[str, Any] = Depends(require_roles("ADMIN", "SYSTEM_ADMIN")),
+    conn: Connection = Depends(get_db_connection),
+) -> dict[str, Any]:
+    """
+    Administrator workflow to APPROVE, REJECT, SUSPEND, or REVOKE staff accounts.
+    - Hard-blocks self-approval or self-modification (`target_user_id != current_user['user_id']`).
+    - Never invents faculty records (`linked_staff_id` must exist in `staff`).
+    - Immediately invalidates live tokens (`tokens_valid_after`) when suspending, rejecting, or revoking.
+    """
+    if target_user_id == current_user["user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Users and administrators cannot approve or modify their own account eligibility.",
+        )
+
+    target = conn.execute(
+        text("SELECT user_id, email, approval_status, linked_staff_id FROM users WHERE user_id = :uid LIMIT 1"),
+        {"uid": target_user_id},
+    ).mappings().first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target account not found.")
+
+    conn.execute(text("SET @current_app_user_id = :actor"), {"actor": current_user["user_id"]})
+
+    if payload.action == "APPROVE":
+        role_code = payload.role_code or "FACULTY"
+        staff_id = payload.linked_staff_id if payload.linked_staff_id is not None else target["linked_staff_id"]
+        if staff_id is not None:
+            staff_ok = conn.execute(
+                text("SELECT 1 FROM staff WHERE staff_id = :sid LIMIT 1"),
+                {"sid": staff_id},
+            ).scalar()
+            if not staff_ok:
+                raise HTTPException(status_code=400, detail="Selected staff_id does not exist in RVCE staff roster.")
+
+        conn.execute(
+            text(
+                """
+                UPDATE users
+                SET approval_status = 'APPROVED',
+                    is_active = TRUE,
+                    linked_staff_id = :sid,
+                    approved_by_user_id = :actor,
+                    approved_at = CURRENT_TIMESTAMP,
+                    status_reason = :reason
+                WHERE user_id = :uid
+                """
+            ),
+            {
+                "sid": staff_id,
+                "actor": current_user["user_id"],
+                "reason": payload.reason.strip() if payload.reason else None,
+                "uid": target_user_id,
+            },
+        )
+        conn.execute(text("DELETE FROM user_roles WHERE user_id = :uid"), {"uid": target_user_id})
+        role_id = conn.execute(
+            text("SELECT role_id FROM roles WHERE role_code = :rc LIMIT 1"),
+            {"rc": role_code},
+        ).scalar()
+        if role_id:
+            conn.execute(
+                text("INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)"),
+                {"uid": target_user_id, "rid": int(role_id)},
+            )
+        conn.commit()
+        return {
+            "user_id": target_user_id,
+            "approval_status": "APPROVED",
+            "is_active": True,
+            "role_code": role_code,
+            "linked_staff_id": staff_id,
+        }
+
+    status_map = {
+        "REJECT": "REJECTED",
+        "SUSPEND": "SUSPENDED",
+        "REVOKE": "REVOKED",
+    }
+    new_status = status_map[payload.action]
+    conn.execute(
+        text(
+            """
+            UPDATE users
+            SET approval_status = :nst,
+                is_active = FALSE,
+                status_reason = :reason,
+                tokens_valid_after = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 SECOND)
+            WHERE user_id = :uid
+            """
+        ),
+        {
+            "nst": new_status,
+            "reason": payload.reason.strip() if payload.reason else f"Account marked {new_status} by administrator.",
+            "uid": target_user_id,
+        },
+    )
+    if payload.action in ("REJECT", "REVOKE"):
+        conn.execute(text("DELETE FROM user_roles WHERE user_id = :uid"), {"uid": target_user_id})
+    conn.commit()
+    return {
+        "user_id": target_user_id,
+        "approval_status": new_status,
+        "is_active": False,
+    }
 
 
 @router.get("/audit-logs")

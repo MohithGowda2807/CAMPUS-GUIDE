@@ -418,7 +418,13 @@ export function CampusMapPage() {
         `/buildings/${item.building_id}?floor=${item.floor_id ?? ''}&room=${item.room_id ?? ''}`
       );
     } else if (item.entity_type === 'FACULTY') {
-      if (item.building_id) {
+      if (item.building_id && item.floor_id && item.room_id) {
+        // Faculty has an assigned room with a mapped floor: navigate directly to indoor floor plan with room highlighted
+        navigate(
+          `/buildings/${item.building_id}?floor=${item.floor_id}&room=${item.room_id}`
+        );
+      } else if (item.building_id) {
+        // Faculty without an allocated room or floor plan: highlight the department's building on campus map
         setQuery('');
         setActiveCategory('ALL');
         setSelectedFacilityId(null);

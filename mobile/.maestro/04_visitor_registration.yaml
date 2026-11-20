@@ -1,0 +1,18 @@
+appId: edu.rvce.campusguide
+name: Journey D — Visitor Pre-Registration & Validation
+---
+- launchApp:
+    clearState: false
+- tapOn: "Services"
+- tapOn: "Visitor Pass"
+- tapOn: "Generate Gate Pass"
+- assertVisible: "Please enter visitor full name."
+- tapOn: "Full Name *"
+- inputText: "Test Candidate Visitor"
+- tapOn: "10-digit mobile number"
+- inputText: "9845000111"
+- tapOn: "Admissions Inquiry"
+- hideKeyboard
+- tapOn: "Generate Gate Pass"
+- assertVisible: "Visitor Pass Issued"
+- assertVisible: "RVCE-"

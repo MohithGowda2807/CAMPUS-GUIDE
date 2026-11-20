@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "RVCE Campus Navigator",
+    "slug": "rvce-campus-navigator",
+    "version": "2.3.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "rvce-navigator",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#27447E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "edu.rvce.campusguide"
+    },
+    "android": {
+      "package": "edu.rvce.campusguide",
+      "versionCode": 5,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#27447E"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "INTERNET"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#27447E",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-image",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "RVCE Campus Navigator requires access to your location to show your real-time position on the campus map."
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      "expo-web-browser"
+    ]
+  }
+}

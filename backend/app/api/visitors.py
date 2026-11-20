@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from backend.app.auth.security import get_optional_user, require_roles
+from backend.app.auth.security import expand_effective_roles, get_optional_user, require_roles
 from backend.app.config.database import get_db_connection
 from backend.app.schemas.domain import (
     GateActionRequest,
@@ -135,7 +135,7 @@ def list_authorised_visitor_records(
     ),
     conn: Connection = Depends(get_db_connection),
 ) -> list[dict[str, Any]]:
-    user_roles = set(current_user["roles"])
+    user_roles = expand_effective_roles(current_user["roles"])
     clauses = ["1=1"]
     params: dict[str, Any] = {"lim": limit}
 
@@ -188,7 +188,7 @@ def record_visit_checkpoint_action(
     if not visit:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visit record not found.")
 
-    user_roles = set(current_user["roles"])
+    user_roles = expand_effective_roles(current_user["roles"])
     if payload.action in ("CHECK_IN", "CHECK_OUT"):
         if not user_roles.intersection({"SECURITY_RECEPTION", "SYSTEM_ADMIN"}):
             raise HTTPException(

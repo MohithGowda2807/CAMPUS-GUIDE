@@ -2,39 +2,107 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any, Literal
-from pydantic import BaseModel, EmailStr, Field
-
-
-class LoginRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=60)
-    password: str = Field(..., min_length=6, max_length=128)
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserProfileOut(BaseModel):
     user_id: int
+    cognito_sub: str
     username: str
     email: str
+    full_name: str
     linked_staff_id: int | None = None
     staff_name: str | None = None
     dept_id: int | None = None
-    auth_provider: str
+    dept_code: str | None = None
+    dept_name: str | None = None
+    designation: str | None = None
+    employee_code: str | None = None
+    auth_provider: str = "COGNITO_OIDC"
+    email_verified: bool = True
+    mfa_enabled: bool = False
+    approval_status: str = "APPROVED"
     roles: list[str]
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserProfileOut
+class SessionStatusOut(BaseModel):
+    onboarding_status: Literal[
+        "UNREGISTERED_PROFILE",
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "REJECTED",
+        "SUSPENDED",
+        "REVOKED",
+    ]
+    email: str | None = None
+    email_verified: bool = False
+    status_reason: str | None = None
+    user: UserProfileOut | None = None
+
+
+class StaffRegistrationCompleteRequest(BaseModel):
+    """
+    Strictly forbids client-supplied role, approval_status, or privilege fields (`extra='forbid'`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(..., min_length=2, max_length=140)
+    email: str = Field(..., min_length=13, max_length=150)
+    terms_accepted: bool = Field(..., description="Must be explicitly True to complete registration.")
+
+
+class StaffSelfProfileUpdateRequest(BaseModel):
+    """
+    Permitted self-service faculty/staff fields only. Institutional HR attributes
+    (`employee_code`, `cadre_rank`, `dept_id`, `designation`) cannot be modified by self-service.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    office_room_id: int | None = None
+    public_email: str | None = Field(default=None, max_length=150)
+    official_profile_url: str | None = Field(default=None, max_length=255)
+    profile_visibility: Literal["PUBLIC", "INTERNAL_ONLY", "HIDDEN"] = "PUBLIC"
 
 
 class AvailabilityUpdateRequest(BaseModel):
-    availability_state: Literal["AVAILABLE", "BUSY_SCHEDULED", "UNAVAILABLE", "UNKNOWN"]
+    model_config = ConfigDict(extra="forbid")
+
+    availability_state: Literal[
+        "AVAILABLE",
+        "BUSY",
+        "IN_CLASS",
+        "IN_MEETING",
+        "BUSY_SCHEDULED",
+        "UNAVAILABLE",
+        "NOT_SPECIFIED",
+        "UNKNOWN",
+    ]
     public_note: str | None = Field(default=None, max_length=200)
     valid_minutes: int = Field(default=180, ge=15, le=720)
     staff_id: int | None = Field(
         default=None,
-        description="Optional target staff_id when updated by Department Coordinator or System Admin.",
+        description="Optional target staff_id ONLY when updated by an authorised Administrator.",
     )
+
+
+class AdminAllowlistCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(..., min_length=13, max_length=150)
+    linked_staff_id: int | None = None
+    assigned_role_code: Literal["FACULTY", "STAFF"] = "FACULTY"
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class AdminAccountDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["APPROVE", "REJECT", "SUSPEND", "REVOKE"]
+    role_code: Literal["FACULTY", "STAFF", "ADMIN"] | None = None
+    linked_staff_id: int | None = None
+    reason: str | None = Field(default=None, max_length=255)
 
 
 class VisitorRegistrationRequest(BaseModel):
@@ -197,8 +265,13 @@ class FloorPlanPublishRequest(BaseModel):
 
 
 class UserCreateRequest(BaseModel):
+    """Admin-only Cognito identity mapping provisioning (Zero password storage)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cognito_sub: str = Field(..., min_length=8, max_length=128)
     username: str = Field(..., min_length=3, max_length=60)
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
+    email: str = Field(..., min_length=13, max_length=150)
+    full_name: str = Field(..., min_length=2, max_length=140)
     linked_staff_id: int | None = None
     role_codes: list[str] = Field(min_length=1)

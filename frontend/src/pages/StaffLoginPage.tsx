@@ -61,15 +61,15 @@ export function StaffLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-[#202938] mb-1.5">
-                Staff Username or Institutional Email
+                Official RVCE Email (@rvce.edu.in)
               </label>
               <input
-                type="text"
+                type="email"
                 required
-                autoComplete="username"
+                autoComplete="email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. security.desk or facility.admin"
+                placeholder="name@rvce.edu.in"
                 className="w-full px-3 py-2 text-sm bg-[#F5F7FA] border border-[#E2E8F0] rounded-md focus:bg-white focus:border-[#27447E] outline-none"
               />
             </div>

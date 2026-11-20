@@ -1,0 +1,18 @@
+appId: edu.rvce.campusguide
+name: Journey A — Campus Discovery & Road/Walkway Navigation
+---
+- launchApp:
+    clearState: false
+- assertVisible: "RVCE Campus Navigator"
+- tapOn: "Explore"
+- assertVisible: "All Campus"
+- tapOn: "Search buildings, faculty, cafeterias..."
+- inputText: "Computer Science"
+- assertVisible: "Department of Computer Science & Engineering"
+- tapOn: "Department of Computer Science & Engineering"
+- assertVisible: "Directions"
+- assertVisible: "Floors & Rooms"
+- tapOn: "Directions"
+- assertVisible: "Turn-by-Turn"
+- assertVisible: "Walk"
+- assertVisible: "Drive"

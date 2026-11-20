@@ -18,7 +18,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import bcrypt
 import pymysql
 from pymongo import MongoClient
 
@@ -123,9 +122,7 @@ def seed_mysql_and_mongo(
     conn: pymysql.connections.Connection,
     mongo_uri: str,
     mongo_db_name: str,
-    default_password: str,
 ) -> None:
-    pwd_hash = bcrypt.hashpw(default_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     now = datetime.now()
 
     osm_path = ROOT_DIR / "database" / "seed_data" / "rvce_campus_osm_geometries.json"
@@ -147,8 +144,12 @@ def seed_mysql_and_mongo(
     with conn.cursor() as cur:
         cur.execute("USE campusguide")
 
-        # 1. Institutional Roles
+        # 1. Institutional Roles (Canonical RBAC: PUBLIC, FACULTY, STAFF, ADMIN + Operational Scopes)
         roles = [
+            ("PUBLIC", "Public User", "Unauthenticated access to campus map, buildings, rooms, facilities, and directory."),
+            ("FACULTY", "RVCE Faculty", "Update own approved profile, availability, and host visitor approvals."),
+            ("STAFF", "Authorised RVCE Staff", "Authorised non-teaching & security gate operations."),
+            ("ADMIN", "Institutional Administrator", "Approve/suspend/revoke staff accounts, manage allowlist, directory, and audit logs."),
             ("PUBLIC_VISITOR", "Public Visitor", "Browse public map, buildings, rooms, facilities, and faculty directory."),
             ("SECURITY_RECEPTION", "Security & Reception", "Register visitors, manage gate check-in/check-out, and verify passes."),
             ("FACULTY_STAFF", "Faculty & Staff", "Update own availability status and review incoming host visit requests."),
@@ -397,22 +398,65 @@ def seed_mysql_and_mongo(
         primary_cse_fac = cse_faculty_ids[0]
         secondary_cse_fac = cse_faculty_ids[1] if len(cse_faculty_ids) > 1 else cse_faculty_ids[0]
 
-        # 7. System & Staff Accounts (Role-based accounts for portal operations)
+        # 7. Cognito Identity Mapped Accounts & Controlled Staff Eligibility Allowlist
+        #    NOTE: Zero passwords or password hashes exist in MySQL. `cognito_sub` holds
+        #    the immutable external OIDC Subject UUID issued by Amazon Cognito.
         users_seed = [
-            (None, "sysadmin", "sysadmin@rvce.edu.in", ["SYSTEM_ADMIN", "FACILITY_ADMIN"]),
-            (staff_map["RV-OPS-ADMIN"], "facility.admin", "facilities@rvce.edu.in", ["FACILITY_ADMIN"]),
-            (staff_map["RV-OPS-SEC"], "security.desk", "security@rvce.edu.in", ["SECURITY_RECEPTION"]),
-            (primary_cse_hod, "hod.cse", "hod.cse@rvce.edu.in", ["FACULTY_STAFF", "DEPT_COORDINATOR"]),
-            (primary_cse_fac, "faculty.cse", "faculty.cse@rvce.edu.in", ["FACULTY_STAFF"]),
+            (
+                "00000000-0000-4000-8000-000000000001",
+                None,
+                "sysadmin",
+                "sysadmin@rvce.edu.in",
+                "RVCE Portal Institutional Administrator",
+                ["ADMIN", "SYSTEM_ADMIN", "FACILITY_ADMIN"],
+            ),
+            (
+                "00000000-0000-4000-8000-000000000002",
+                staff_map["RV-OPS-ADMIN"],
+                "facility.admin",
+                "facilities@rvce.edu.in",
+                "Campus Estate & Facility Coordinator",
+                ["ADMIN", "FACILITY_ADMIN"],
+            ),
+            (
+                "00000000-0000-4000-8000-000000000003",
+                staff_map["RV-OPS-SEC"],
+                "security.desk",
+                "security@rvce.edu.in",
+                "Main Gate Security Supervisor",
+                ["STAFF", "SECURITY_RECEPTION"],
+            ),
+            (
+                "00000000-0000-4000-8000-000000000004",
+                primary_cse_hod,
+                "hod.cse",
+                "hod.cse@rvce.edu.in",
+                "Head of Department — CSE",
+                ["FACULTY", "FACULTY_STAFF", "DEPT_COORDINATOR"],
+            ),
+            (
+                "00000000-0000-4000-8000-000000000005",
+                primary_cse_fac,
+                "faculty.cse",
+                "faculty.cse@rvce.edu.in",
+                "Senior Faculty Member — CSE",
+                ["FACULTY", "FACULTY_STAFF"],
+            ),
         ]
         user_map: dict[str, int] = {}
-        for linked_staff, uname, email, rcodes in users_seed:
+        for cog_sub, linked_staff, uname, email, fname, rcodes in users_seed:
             cur.execute(
                 """
-                INSERT INTO users (linked_staff_id, username, email, password_hash, auth_provider, is_active)
-                VALUES (%s, %s, %s, %s, 'LOCAL', TRUE)
+                INSERT INTO users
+                (cognito_sub, linked_staff_id, username, email, full_name, auth_provider,
+                 email_verified, approval_status, terms_accepted_at, approved_at, tokens_valid_after, is_active)
+                VALUES (
+                    %s, %s, %s, %s, %s, 'COGNITO_OIDC',
+                    TRUE, 'APPROVED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                    DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 SECOND), TRUE
+                )
                 """,
-                (linked_staff, uname, email, pwd_hash),
+                (cog_sub, linked_staff, uname, email, fname),
             )
             uid = cur.lastrowid
             user_map[uname] = uid
@@ -421,6 +465,23 @@ def seed_mysql_and_mongo(
                     "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
                     (uid, role_map[rc]),
                 )
+
+        # Controlled Administrator-Managed Staff Eligibility Allowlist (@rvce.edu.in)
+        allowlist_seed = [
+            ("hod.cse@rvce.edu.in", primary_cse_hod, "FACULTY", "Verified CSE Head of Department"),
+            ("faculty.cse@rvce.edu.in", primary_cse_fac, "FACULTY", "Verified CSE Teaching Faculty"),
+            ("cse.faculty2@rvce.edu.in", secondary_cse_fac, "FACULTY", "Pre-authorised CSE Faculty Member for self-registration"),
+            ("security@rvce.edu.in", staff_map["RV-OPS-SEC"], "STAFF", "Authorised Main Gate Security Desk"),
+        ]
+        for al_email, al_staff_id, al_role, al_note in allowlist_seed:
+            cur.execute(
+                """
+                INSERT INTO staff_eligibility_allowlist
+                (email, linked_staff_id, assigned_role_code, is_active, added_by_user_id, notes)
+                VALUES (%s, %s, %s, TRUE, %s, %s)
+                """,
+                (al_email, al_staff_id, al_role, user_map["sysadmin"], al_note),
+            )
 
         # 8. Verified Campus Facilities / POIs (12 OpenStreetMap-surveyed RVCE locations)
         facility_room_links = {
@@ -557,7 +618,6 @@ def main() -> None:
                 conn,
                 mongo_uri=mongo_uri,
                 mongo_db_name=mongo_db,
-                default_password=cfg.get("DEV_SEED_DEFAULT_PASSWORD", "RvcePortal@2026"),
             )
         else:
             mclient = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)

@@ -30,15 +30,36 @@ export function StaffPortalPage() {
   const { user, loading, hasAnyRole } = useAuth();
 
   const canManageVisits = hasAnyRole(
+    'FACULTY',
+    'STAFF',
     'SECURITY_RECEPTION',
     'FACULTY_STAFF',
     'FACILITY_ADMIN',
+    'ADMIN',
     'SYSTEM_ADMIN'
   );
-  const canUpdateAvailability = hasAnyRole('FACULTY_STAFF', 'DEPT_COORDINATOR', 'SYSTEM_ADMIN');
-  const canManageCampus = hasAnyRole('FACILITY_ADMIN', 'DEPT_COORDINATOR', 'SYSTEM_ADMIN');
-  const canViewReports = hasAnyRole('SECURITY_RECEPTION', 'FACILITY_ADMIN', 'SYSTEM_ADMIN');
-  const canSystemAdmin = hasAnyRole('SYSTEM_ADMIN');
+  const canUpdateAvailability = hasAnyRole(
+    'FACULTY',
+    'FACULTY_STAFF',
+    'DEPT_COORDINATOR',
+    'ADMIN',
+    'SYSTEM_ADMIN'
+  );
+  const canManageCampus = hasAnyRole(
+    'STAFF',
+    'FACILITY_ADMIN',
+    'DEPT_COORDINATOR',
+    'ADMIN',
+    'SYSTEM_ADMIN'
+  );
+  const canViewReports = hasAnyRole(
+    'STAFF',
+    'SECURITY_RECEPTION',
+    'FACILITY_ADMIN',
+    'ADMIN',
+    'SYSTEM_ADMIN'
+  );
+  const canSystemAdmin = hasAnyRole('ADMIN', 'SYSTEM_ADMIN');
 
   const [activeTab, setActiveTab] = useState<PortalTab>('visits');
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -552,9 +573,11 @@ export function StaffPortalPage() {
                 className="w-full px-3 py-2 text-sm bg-[#F5F7FA] border border-[#E2E8F0] rounded-md"
               >
                 <option value="AVAILABLE">Available</option>
-                <option value="BUSY_SCHEDULED">Busy / Scheduled</option>
+                <option value="BUSY">Busy</option>
+                <option value="IN_CLASS">In Class</option>
+                <option value="IN_MEETING">In a Meeting</option>
                 <option value="UNAVAILABLE">Unavailable</option>
-                <option value="UNKNOWN">Clear Status (Unknown)</option>
+                <option value="NOT_SPECIFIED">Not Specified</option>
               </select>
             </div>
 

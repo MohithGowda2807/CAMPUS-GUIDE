@@ -1,0 +1,20 @@
+appId: edu.rvce.campusguide
+name: Journey E — Staff Authentication, RBAC & Session Logout
+---
+- launchApp:
+    clearState: false
+- tapOn: "Account"
+- assertVisible: "Staff & Admin Sign In"
+- tapOn: "Username"
+- inputText: "invalid.user"
+- tapOn: "Password"
+- inputText: "WrongPass@123"
+- hideKeyboard
+- tapOn: "Sign In"
+- assertVisible: "Invalid username or password"
+- tapOn: "HOD (CSE)"
+- assertVisible: "Dr. Shanta Ranga Swamy"
+- assertVisible: "Office Availability"
+- tapOn: "Sign Out"
+- tapOn: "Sign Out"
+- assertVisible: "Staff & Admin Sign In"

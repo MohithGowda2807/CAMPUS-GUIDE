@@ -22,10 +22,11 @@ const ROOM_CATEGORY_FILL: Record<string, string> = {
   CLASSROOM: '#F8FAFC',
   LABORATORY: '#EFF6FF',
   SEMINAR_HALL: '#F0F9FF',
-  FACULTY_OFFICE: '#F5F7FA',
-  HOD_CABIN: '#EDF2FA',
+  FACULTY_OFFICE: '#FFF7ED', // Warm amber highlight for faculty cabins
+  HOD_CABIN: '#FEF3C7',      // Golden amber for HoD cabin
   ADMIN_OFFICE: '#F8FAFC',
   LIBRARY_ZONE: '#F0FDF4',
+  RESTROOM: '#F1F5F9',
   RECEPTION: '#FEFCE8',
 };
 

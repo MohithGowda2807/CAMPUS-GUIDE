@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
+from sqlalchemy import text
 
-from backend.app.auth.security import create_access_token, hash_password, verify_password
+from backend.app.auth.data_protection import (
+    decrypt_sensitive_field,
+    encrypt_sensitive_field,
+    normalize_and_validate_rvce_email,
+)
+from backend.app.config.database import get_mysql_engine
 from backend.app.config.settings import get_settings
 from backend.app.main import app
 from database.setup_databases import parse_sql_statements
@@ -12,14 +18,27 @@ from database.setup_databases import parse_sql_statements
 client = TestClient(app)
 
 
-def test_password_hashing_and_jwt_roundtrip() -> None:
-    hashed = hash_password("InstitutionalPass#2026")
-    assert hashed != "InstitutionalPass#2026"
-    assert verify_password("InstitutionalPass#2026", hashed) is True
-    assert verify_password("WrongPassword", hashed) is False
+def test_zero_password_database_and_aesgcm_roundtrip() -> None:
+    # Verify NO password or password_hash column exists anywhere in MySQL `campusguide`
+    with get_mysql_engine().connect() as conn:
+        forbidden_cols = conn.execute(
+            text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND LOWER(column_name) IN ('password', 'password_hash', 'mfa_secret', 'refresh_token')
+                """
+            )
+        ).scalars().all()
+        assert list(forbidden_cols) == []
 
-    token = create_access_token(user_id=10, username="security.desk", roles=["SECURITY_RECEPTION"])
-    assert isinstance(token, str) and len(token) > 30
+    # Verify AES-256-GCM authenticated encryption + AAD binding
+    ct = encrypt_sensitive_field("Confidential-Staff-Ref-01", aad_context="sub:test-1")
+    assert b"Confidential-Staff-Ref-01" not in ct
+    assert decrypt_sensitive_field(ct, aad_context="sub:test-1") == "Confidential-Staff-Ref-01"
+
+    assert normalize_and_validate_rvce_email("  HOD.CSE@RVCE.EDU.IN ") == "hod.cse@rvce.edu.in"
 
 
 def test_protected_endpoints_enforce_authentication() -> None:

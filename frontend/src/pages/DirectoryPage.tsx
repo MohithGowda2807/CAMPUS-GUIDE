@@ -258,15 +258,23 @@ export function DirectoryPage() {
                         {f.effective_availability !== 'UNKNOWN' && (
                           <AvailabilityBadge state={f.effective_availability} />
                         )}
-                        {f.building_id && (
+                        {f.building_id && f.floor_id && f.office_room_id ? (
+                          <Link
+                            to={`/buildings/${f.building_id}?floor=${f.floor_id}&room=${f.office_room_id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#27447E] text-white text-xs font-semibold hover:bg-[#1E3666] shadow-xs transition-colors"
+                          >
+                            <MapPin className="w-3.5 h-3.5" />
+                            View Cabin on Floor Plan
+                          </Link>
+                        ) : f.building_id ? (
                           <Link
                             to={`/map?building=${f.building_id}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#27447E] text-[#27447E] text-xs font-semibold hover:bg-[#EDF2FA] transition-colors"
                           >
                             <MapPin className="w-3.5 h-3.5" />
-                            Locate on Map
+                            Locate Dept Building
                           </Link>
-                        )}
+                        ) : null}
                       </div>
 
                       {f.availability_note && f.effective_availability !== 'UNKNOWN' && (

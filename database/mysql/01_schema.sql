@@ -14,6 +14,8 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS change_audit_log;
+DROP TABLE IF EXISTS revoked_token_jtis;
+DROP TABLE IF EXISTS staff_eligibility_allowlist;
 DROP TABLE IF EXISTS visitor_logs;
 DROP TABLE IF EXISTS visitors;
 DROP TABLE IF EXISTS user_roles;
@@ -217,24 +219,76 @@ CREATE TABLE staff (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
--- 8. USERS & USER_ROLES (RBAC)
+-- 8. USERS, ELIGIBILITY ALLOWLIST, REVOKED JTI HASHES & USER_ROLES (RBAC)
+--    NOTE: Zero passwords, password hashes, MFA secrets, or plaintext tokens
+--          are ever stored in the application database. Authentication is
+--          delegated exclusively to Amazon Cognito User Pools (OIDC / PKCE).
 -- -----------------------------------------------------------------------------
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
+    cognito_sub VARCHAR(128) NOT NULL,
     linked_staff_id INT NULL,
     username VARCHAR(60) NOT NULL,
     email VARCHAR(150) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    auth_provider ENUM('LOCAL', 'RVCE_SSO') NOT NULL DEFAULT 'LOCAL',
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    full_name VARCHAR(140) NOT NULL,
+    encrypted_recovery_meta VARBINARY(512) NULL,
+    auth_provider ENUM('COGNITO_OIDC') NOT NULL DEFAULT 'COGNITO_OIDC',
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    approval_status ENUM(
+        'PENDING_APPROVAL',
+        'APPROVED',
+        'REJECTED',
+        'SUSPENDED',
+        'REVOKED'
+    ) NOT NULL DEFAULT 'PENDING_APPROVAL',
+    terms_accepted_at DATETIME NULL,
+    approved_by_user_id INT NULL,
+    approved_at DATETIME NULL,
+    status_reason VARCHAR(255) NULL,
+    tokens_valid_after DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_users_staff FOREIGN KEY (linked_staff_id)
         REFERENCES staff (staff_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_users_approver FOREIGN KEY (approved_by_user_id)
+        REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT uq_users_cognito_sub UNIQUE (cognito_sub),
     CONSTRAINT uq_users_username UNIQUE (username),
     CONSTRAINT uq_users_email UNIQUE (email),
-    CONSTRAINT uq_users_linked_staff UNIQUE (linked_staff_id)
+    CONSTRAINT uq_users_linked_staff UNIQUE (linked_staff_id),
+    CONSTRAINT chk_users_rvce_email CHECK (email LIKE '%@rvce.edu.in'),
+    INDEX idx_users_approval_active (approval_status, is_active)
+) ENGINE=InnoDB;
+
+CREATE TABLE staff_eligibility_allowlist (
+    allowlist_id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(150) NOT NULL,
+    linked_staff_id INT NULL,
+    assigned_role_code ENUM('FACULTY', 'STAFF') NOT NULL DEFAULT 'FACULTY',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    added_by_user_id INT NULL,
+    notes VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_allowlist_email UNIQUE (email),
+    CONSTRAINT fk_allowlist_staff FOREIGN KEY (linked_staff_id)
+        REFERENCES staff (staff_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_allowlist_added_by FOREIGN KEY (added_by_user_id)
+        REFERENCES users (user_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT chk_allowlist_rvce_email CHECK (email LIKE '%@rvce.edu.in')
+) ENGINE=InnoDB;
+
+CREATE TABLE revoked_token_jtis (
+    jti_hash CHAR(64) NOT NULL PRIMARY KEY,
+    user_id INT NULL,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_revoked_jti_user FOREIGN KEY (user_id)
+        REFERENCES users (user_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_revoked_jti_exp (expires_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE user_roles (
@@ -327,7 +381,16 @@ CREATE TABLE facilities (
 CREATE TABLE faculty_availability (
     availability_id INT AUTO_INCREMENT PRIMARY KEY,
     staff_id INT NOT NULL,
-    availability_state ENUM('AVAILABLE', 'BUSY_SCHEDULED', 'UNAVAILABLE', 'UNKNOWN') NOT NULL DEFAULT 'UNKNOWN',
+    availability_state ENUM(
+        'AVAILABLE',
+        'BUSY',
+        'IN_CLASS',
+        'IN_MEETING',
+        'BUSY_SCHEDULED',
+        'UNAVAILABLE',
+        'NOT_SPECIFIED',
+        'UNKNOWN'
+    ) NOT NULL DEFAULT 'NOT_SPECIFIED',
     source_type ENUM('FACULTY_SELF', 'DEPARTMENT_OFFICE', 'APPROVED_SCHEDULE', 'SYSTEM_EXPIRED') NOT NULL,
     public_note VARCHAR(200) NULL,
     valid_from DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -269,31 +269,96 @@ export function BuildingIndoorPage() {
               </Link>
             </div>
 
-            {/* Intuitive Floor Selector Bar */}
+            {/* Google Maps Orion-Mall Style Vertical Multi-Floor Elevator Bar */}
             {detail.floors.length > 0 ? (
-              <div className="bg-white border border-[#E2E8F0] rounded-lg p-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-[#64748B] px-2 flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-[#27447E]" />
-                  Floors:
-                </span>
-                {detail.floors.map((fl) => {
-                  const active = fl.floor_id === selectedFloorId;
-                  return (
-                    <button
-                      key={fl.floor_id}
-                      type="button"
-                      onClick={() => handleFloorChange(fl.floor_id)}
-                      className={`px-3.5 py-2 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
-                        active
-                          ? 'bg-[#27447E] text-white'
-                          : 'bg-[#F5F7FA] text-[#202938] hover:bg-[#EDF2FA] hover:text-[#27447E]'
-                      }`}
-                    >
-                      {fl.floor_name}
-                      {fl.room_count > 0 ? ` (${fl.room_count})` : ''}
-                    </button>
-                  );
-                })}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-[#F1F5F9]">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-[#27447E]/10 text-[#27447E]">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#1E293B] tracking-tight">
+                        Select Floor Level
+                      </h3>
+                      <p className="text-xs text-[#64748B]">
+                        Floor-by-floor interactive indoor navigation &amp; faculty cabin directory
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-xs font-medium text-[#27447E] bg-[#EDF2FA] px-3 py-1.5 rounded-full self-start sm:self-auto">
+                    {detail.floors.length} Floors Mapped
+                  </div>
+                </div>
+
+                {/* Vertical Elevator / Mall Stack Layout */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[...detail.floors].reverse().map((fl) => {
+                    const active = fl.floor_id === selectedFloorId;
+                    const levelCode =
+                      fl.floor_number === 0
+                        ? 'GF'
+                        : fl.floor_number === 1
+                        ? '1F'
+                        : fl.floor_number === 2
+                        ? '2F'
+                        : fl.floor_number === 3
+                        ? '3F'
+                        : fl.floor_number < 0
+                        ? `B${Math.abs(fl.floor_number)}`
+                        : `${fl.floor_number}F`;
+
+                    return (
+                      <button
+                        key={fl.floor_id}
+                        type="button"
+                        onClick={() => handleFloorChange(fl.floor_id)}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer text-left ${
+                          active
+                            ? 'bg-[#27447E] border-[#27447E] text-white shadow-md shadow-[#27447E]/20 scale-[1.01]'
+                            : 'bg-[#F8FAFC] border-[#E2E8F0] text-[#334155] hover:bg-[#F1F5F9] hover:border-[#CBD5E1]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm tracking-wide ${
+                              active
+                                ? 'bg-white/20 text-white'
+                                : 'bg-[#E2E8F0] text-[#1E293B]'
+                            }`}
+                          >
+                            {levelCode}
+                          </span>
+                          <div>
+                            <div
+                              className={`text-sm font-bold leading-snug ${
+                                active ? 'text-white' : 'text-[#1E293B]'
+                              }`}
+                            >
+                              {fl.floor_name}
+                            </div>
+                            <div
+                              className={`text-xs ${
+                                active ? 'text-white/80' : 'text-[#64748B]'
+                              }`}
+                            >
+                              {fl.room_count} Venues &amp; Cabins
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            active
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[#E2E8F0]/70 text-[#475569]'
+                          }`}
+                        >
+                          {active ? 'Viewing' : 'Switch'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="bg-white border border-[#E2E8F0] rounded-lg p-6 text-sm text-[#64748B]">

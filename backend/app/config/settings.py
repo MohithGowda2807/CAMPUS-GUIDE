@@ -20,9 +20,21 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    JWT_SECRET_KEY: str = "change-this-to-a-secure-random-64-char-hex-secret-before-deploy"
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    # Amazon Cognito User Pools (Public OIDC / OAuth 2.0 PKCE Client — Zero Client Secret)
+    COGNITO_REGION: str = "ap-south-1"
+    COGNITO_USER_POOL_ID: str = ""
+    COGNITO_APP_CLIENT_ID: str = ""
+    COGNITO_DOMAIN: str = ""
+    COGNITO_REDIRECT_URI: str = "rvce-navigator://auth/callback"
+    COGNITO_LOGOUT_URI: str = "rvce-navigator://auth/logout"
+    COGNITO_JWKS_CACHE_SECONDS: int = 3600
+    ALLOWED_STAFF_EMAIL_DOMAIN: str = "rvce.edu.in"
+
+    # Strictly gated to non-production local development when Cognito Pool ID is not yet set
+    DEV_OIDC_SANDBOX_ENABLED: bool = True
+
+    # 32-byte Base64 key for AES-256-GCM authenticated field protection
+    DATA_PROTECTION_KEY_B64: str = ""
 
     MYSQL_HOST: str = "127.0.0.1"
     MYSQL_PORT: int = 3306
@@ -40,6 +52,52 @@ class Settings(BaseSettings):
     MAP_ATTRIBUTION: str = (
         "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"
     )
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.strip().lower() == "production"
+
+    @property
+    def use_aws_cognito(self) -> bool:
+        return bool(self.COGNITO_USER_POOL_ID.strip() and self.COGNITO_APP_CLIENT_ID.strip())
+
+    @property
+    def use_dev_oidc_sandbox(self) -> bool:
+        if self.is_production:
+            return False
+        return (not self.use_aws_cognito) and self.DEV_OIDC_SANDBOX_ENABLED
+
+    @property
+    def cognito_issuer(self) -> str:
+        if self.use_aws_cognito:
+            return (
+                f"https://cognito-idp.{self.COGNITO_REGION.strip()}.amazonaws.com/"
+                f"{self.COGNITO_USER_POOL_ID.strip()}"
+            )
+        return "https://dev-oidc.rvce-navigator.local"
+
+    @property
+    def cognito_jwks_url(self) -> str:
+        return f"{self.cognito_issuer}/.well-known/jwks.json"
+
+    @property
+    def effective_client_id(self) -> str:
+        if self.use_aws_cognito:
+            return self.COGNITO_APP_CLIENT_ID.strip()
+        return "rvce-mobile-public-client"
+
+    def validate_security_posture(self) -> None:
+        if self.is_production:
+            if not self.use_aws_cognito:
+                raise RuntimeError(
+                    "Production startup blocked: COGNITO_USER_POOL_ID and COGNITO_APP_CLIENT_ID "
+                    "must be configured when APP_ENV=production."
+                )
+            if not self.DATA_PROTECTION_KEY_B64.strip():
+                raise RuntimeError(
+                    "Production startup blocked: DATA_PROTECTION_KEY_B64 (32-byte Base64 AES-256-GCM key) "
+                    "is required when APP_ENV=production."
+                )
 
     @property
     def mysql_sqlalchemy_url(self) -> str:

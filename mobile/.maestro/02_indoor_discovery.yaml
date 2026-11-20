@@ -1,0 +1,16 @@
+appId: edu.rvce.campusguide
+name: Journey B — Indoor Floor Plan & Room Discovery
+---
+- launchApp:
+    clearState: false
+- tapOn: "Explore"
+- tapOn: "Search buildings, faculty, cafeterias..."
+- inputText: "CSE"
+- tapOn: "Department of Computer Science & Engineering"
+- assertVisible: "Floors & Rooms"
+- tapOn: "Floors & Rooms"
+- assertVisible: "Searchable Room Index"
+- tapOn:
+    text: ".*Floor.*"
+    index: 0
+- assertVisible: "Floor Plan"

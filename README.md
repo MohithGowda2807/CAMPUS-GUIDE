@@ -18,12 +18,26 @@ Official-grade web platform for **R. V. College of Engineering (RVCE), Bengaluru
 
 | Layer | Stack | Responsibility |
 |---|---|---|
+| **Android Native App** | Expo SDK 58 / React Native, MapLibre Native, `expo-secure-store` | Standalone Android APK (`RVCE-Campus-Navigator-v2.2.0.apk`), offline Dijkstra routing, OIDC + `S256` PKCE 13-screen Staff Portal |
 | **Web Frontend** | React, TypeScript, Vite, Tailwind CSS, Leaflet, Lucide | Institutional RVCE interface, outdoor GIS map, indoor SVG floor-plan viewer, responsive staff portal |
-| **Backend API** | Python 3.11+, FastAPI, SQLAlchemy Core, Motor, PyJWT, bcrypt | Authentication, RBAC enforcement, input validation, hybrid database orchestration |
-| **Primary RDBMS** | MySQL 8.0+ (`campusguide`) | Authoritative 3NF relational records, foreign-key integrity, views, triggers, and transactional stored procedures |
-| **Geospatial & Document Store** | MongoDB 7.0+ / 9.0+ (`campusguide_nosql`) | `2dsphere` GeoJSON campus/building geometries, local-coordinate indoor floor-plan overlays, and search telemetry aggregations |
+| **Backend API** | Python 3.11+, FastAPI, SQLAlchemy Core, Motor, PyJWT (`RS256`), `cryptography` (`AES-256-GCM`) | Cognito JWKS token verification, `@rvce.edu.in` allowlist governance, RBAC enforcement, hybrid database orchestration |
+| **Primary RDBMS** | MySQL 8.0+ (`campusguide`) | Zero-password 3NF relational records (`cognito_sub` identity mapping), foreign-key integrity, views, triggers, and stored procedures |
+| **Geospatial & Document Store** | MongoDB 7.0+ / 9.0+ (`campusguide_nosql`) | `2dsphere` GeoJSON campus/building geometries, 479 routing pathway segments, indoor floor-plan overlays, and search telemetry |
 
 Detailed schema, stored procedures, triggers, views, and document validators are documented in [docs/architecture-and-database.md](docs/architecture-and-database.md).
+
+### Faculty & Staff Authentication Security Documentation (`docs/security/`)
+- [AUTHENTICATION_ARCHITECTURE.md](docs/security/AUTHENTICATION_ARCHITECTURE.md)
+- [COGNITO_CONFIGURATION.md](docs/security/COGNITO_CONFIGURATION.md)
+- [STAFF_REGISTRATION_FLOW.md](docs/security/STAFF_REGISTRATION_FLOW.md)
+- [LOGIN_AND_RECOVERY_FLOW.md](docs/security/LOGIN_AND_RECOVERY_FLOW.md)
+- [RBAC_MATRIX.md](docs/security/RBAC_MATRIX.md)
+- [DATABASE_IDENTITY_MAPPING.md](docs/security/DATABASE_IDENTITY_MAPPING.md)
+- [SECURITY_POLICY.md](docs/security/SECURITY_POLICY.md)
+- [THREAT_MODEL.md](docs/security/THREAT_MODEL.md)
+- [SECURITY_TEST_PLAN.md](docs/security/SECURITY_TEST_PLAN.md)
+- [SECURITY_TEST_RESULTS.md](docs/security/SECURITY_TEST_RESULTS.md)
+- [DEPLOYMENT_CHECKLIST.md](docs/security/DEPLOYMENT_CHECKLIST.md)
 
 ---
 
@@ -82,7 +96,7 @@ CREATE USER IF NOT EXISTS 'rvce_app'@'127.0.0.1' IDENTIFIED BY 'RvceDb@2026';
 GRANT ALL PRIVILEGES ON campusguide.* TO 'rvce_app'@'localhost', 'rvce_app'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
-Then update `MYSQL_USER=rvce_app`, `MYSQL_PASSWORD=RvceDb@2026`, and a strong `JWT_SECRET_KEY` inside `.env` (or run `.\scripts\setup-local.ps1` on Windows PowerShell).
+Then configure `MYSQL_USER`, `MYSQL_PASSWORD`, `DATA_PROTECTION_KEY_B64`, and your Amazon Cognito User Pool variables (`COGNITO_USER_POOL_ID`, `COGNITO_APP_CLIENT_ID`, `COGNITO_DOMAIN`) inside `.env` (see [docs/security/COGNITO_CONFIGURATION.md](docs/security/COGNITO_CONFIGURATION.md)). For runtime least-privilege access in staging/production, apply `database/mysql/06_least_privilege_db_user.sql`.
 
 ### 2. Install Backend Dependencies & Provision Databases
 ```bash

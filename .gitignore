@@ -14,6 +14,16 @@
 /WhatsApp Image*.png
 /Logo.png
 /Faculty-List-for-Website-UploadingApril2026.pdf
+/apk_ui_prompt.txt
+
+# Local AI agent tooling, knowledge graph, scratch scripts & APK build artifacts
+/.agents/
+/.gitattributes
+/graphify-out/
+/scratch/
+/artifacts/
+/mobile/.claude/
+/mobile/AGENTS.md
 
 # Environment & Secrets (NEVER commit credentials)
 .env

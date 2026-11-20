@@ -61,13 +61,12 @@ export function setApiBaseUrl(url: string | null): void {
 }
 
 export function getStoredToken(): string | null {
-  return sessionStorage.getItem(TOKEN_STORAGE_KEY) || localStorage.getItem(TOKEN_STORAGE_KEY);
+  return sessionStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 export function setStoredToken(token: string | null): void {
   if (token) {
     sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
   } else {
     sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -443,11 +442,68 @@ export const campusApi = {
     }
   },
 
-  login: (username: string, password: string) =>
-    request<{ access_token: string; token_type: string; user: UserProfile }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    }),
+  login: async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.endsWith('@rvce.edu.in')) {
+      throw new Error('Only official @rvce.edu.in institutional email addresses are eligible.');
+    }
+    const cfg = await request<{
+      provider_mode: 'AWS_COGNITO' | 'DEV_OIDC_SANDBOX';
+      client_id: string;
+      cognito_idp_endpoint: string;
+    }>('/auth/config');
+
+    let accessToken = '';
+    if (cfg.provider_mode === 'AWS_COGNITO') {
+      const res = await fetch(cfg.cognito_idp_endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+        },
+        body: JSON.stringify({
+          AuthFlow: 'USER_PASSWORD_AUTH',
+          ClientId: cfg.client_id,
+          AuthParameters: { USERNAME: normalizedEmail, PASSWORD: password },
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.AuthenticationResult?.AccessToken) {
+        throw new Error('Invalid institutional email or password.');
+      }
+      accessToken = body.AuthenticationResult.AccessToken;
+    } else {
+      const res = await fetch(`${cfg.cognito_idp_endpoint}/sign-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body?.challenge_name) {
+        throw new Error(
+          'Authenticator verification is mandatory for every staff sign-in. Please sign in using the RVCE Campus Navigator mobile app.'
+        );
+      }
+      if (!res.ok || !body?.tokens?.access_token) {
+        throw new Error('Invalid institutional email or password.');
+      }
+      accessToken = body.tokens.access_token;
+    }
+
+    setStoredToken(accessToken);
+    try {
+      const user = await request<UserProfile>('/auth/me');
+      return { access_token: accessToken, token_type: 'bearer', user };
+    } catch (err) {
+      setStoredToken(null);
+      throw err;
+    }
+  },
+
+  logout: async () => {
+    await request('/auth/logout', { method: 'POST' }).catch(() => null);
+    setStoredToken(null);
+  },
 
   getMe: () => request<UserProfile>('/auth/me'),
 

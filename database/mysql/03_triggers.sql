@@ -11,6 +11,7 @@ DROP TRIGGER IF EXISTS trg_visitor_logs_before_update;
 DROP TRIGGER IF EXISTS trg_buildings_after_update;
 DROP TRIGGER IF EXISTS trg_rooms_after_update;
 DROP TRIGGER IF EXISTS trg_staff_after_update;
+DROP TRIGGER IF EXISTS trg_users_after_update;
 DROP TRIGGER IF EXISTS trg_visitor_logs_after_insert;
 DROP TRIGGER IF EXISTS trg_visitor_logs_after_update;
 
@@ -138,6 +139,7 @@ BEGIN
             'display_name', OLD.display_name,
             'designation', OLD.designation,
             'office_room_id', OLD.office_room_id,
+            'public_email', OLD.public_email,
             'profile_visibility', OLD.profile_visibility,
             'status', OLD.status
         ),
@@ -145,10 +147,40 @@ BEGIN
             'display_name', NEW.display_name,
             'designation', NEW.designation,
             'office_room_id', NEW.office_room_id,
+            'public_email', NEW.public_email,
             'profile_visibility', NEW.profile_visibility,
             'status', NEW.status
         )
     );
+END$$
+
+CREATE TRIGGER trg_users_after_update
+AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+    IF OLD.approval_status <> NEW.approval_status
+       OR OLD.is_active <> NEW.is_active
+       OR OLD.mfa_enabled <> NEW.mfa_enabled
+       OR OLD.tokens_valid_after <> NEW.tokens_valid_after THEN
+        INSERT INTO change_audit_log (user_id, action_type, table_name, record_id, old_value, new_value)
+        VALUES (
+            COALESCE(@current_app_user_id, NEW.approved_by_user_id, NEW.user_id),
+            'STATE_TRANSITION',
+            'users',
+            NEW.user_id,
+            JSON_OBJECT(
+                'approval_status', OLD.approval_status,
+                'is_active', OLD.is_active,
+                'mfa_enabled', OLD.mfa_enabled
+            ),
+            JSON_OBJECT(
+                'approval_status', NEW.approval_status,
+                'is_active', NEW.is_active,
+                'mfa_enabled', NEW.mfa_enabled,
+                'status_reason', NEW.status_reason
+            )
+        );
+    END IF;
 END$$
 
 CREATE TRIGGER trg_visitor_logs_after_insert

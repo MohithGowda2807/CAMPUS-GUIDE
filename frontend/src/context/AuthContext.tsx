@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    void campusApi.logout();
     setStoredToken(null);
     setUser(null);
   }, []);
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasAnyRole = useCallback(
     (...roles: string[]) => {
       if (!user) return false;
-      if (user.roles.includes('SYSTEM_ADMIN')) return true;
+      if (user.roles.includes('SYSTEM_ADMIN') || user.roles.includes('ADMIN')) return true;
       return roles.some((r) => user.roles.includes(r));
     },
     [user]

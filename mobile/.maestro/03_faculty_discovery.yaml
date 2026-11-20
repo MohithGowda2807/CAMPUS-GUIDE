@@ -1,0 +1,13 @@
+appId: edu.rvce.campusguide
+name: Journey C — Faculty Directory & Approved Public Profile
+---
+- launchApp:
+    clearState: false
+- tapOn: "Faculty"
+- assertVisible: "Faculty Directory"
+- tapOn: "Search 339 faculty by name, dept, or role..."
+- inputText: "Shanta Ranga"
+- assertVisible: "Dr. Shanta Ranga Swamy"
+- tapOn: "Dr. Shanta Ranga Swamy"
+- assertVisible: "Approved Public Profile"
+- assertVisible: "View Department Building on Map"
