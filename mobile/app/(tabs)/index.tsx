@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,28 +10,67 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useCampusData } from '../../src/context/CampusDataContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { SearchBar } from '../../src/components/SearchBar';
-import { StatusPill } from '../../src/components/StatusPill';
-import { Colors } from '../../src/theme/colors';
+import { AdaptiveSurface } from '../../src/components/AdaptiveSurface';
+import { SmartLabShowcaseModal } from '../../src/components/SmartLabShowcaseModal';
 import { Radius, Spacing } from '../../src/theme/spacing';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { buildings, connectionState, selectBuilding } = useCampusData();
+  const { isGlass, theme, toggleAppearanceMode } = useTheme();
   const [searchVal, setSearchVal] = useState('');
+  const [assistantVisible, setAssistantVisible] = useState(false);
 
-  // 4 Featured campus landmarks
-  const featured = buildings.slice(0, 4);
+  const greetingText = useMemo(() => {
+    const hr = new Date().getHours();
+    if (hr < 12) return 'Good morning';
+    if (hr < 17) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
+  const jumpToCabin = (params: {
+    buildingId: number;
+    floorId?: number | null;
+    roomId?: number | null;
+  }) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setAssistantVisible(false);
+    const b = buildings.find((x) => x.building_id === params.buildingId);
+    if (b) selectBuilding(b);
+    router.push({
+      pathname: '/(tabs)/map',
+      params: {
+        buildingId: String(params.buildingId),
+        ...(params.floorId ? { floorId: String(params.floorId) } : {}),
+        ...(params.roomId ? { roomId: String(params.roomId) } : {}),
+      },
+    });
+  };
+
+  // Curated key campus destinations (recently / commonly explored)
+  const keyDestinations = useMemo(() => {
+    const eee = buildings.find((b) => b.building_id === 7);
+    const others = buildings.filter((b) => b.building_id !== 7).slice(0, 3);
+    return eee ? [eee, ...others] : buildings.slice(0, 4);
+  }, [buildings]);
+
+  const isLive = connectionState === 'ONLINE';
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.canvas }]}
+      edges={['top', 'left', 'right']}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Official Institutional Header */}
+        {/* 1. Calm Institutional Header */}
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
             <Image
@@ -40,163 +79,353 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
             <View>
-              <Text style={styles.brandName}>RVCE Campus Navigator</Text>
-              <Text style={styles.brandSubtitle}>R. V. College of Engineering®</Text>
+              <Text style={[styles.greetingContext, { color: theme.colors.textMuted }]}>
+                {greetingText} • RVCE Campus
+              </Text>
+              <Text style={[styles.brandName, { color: theme.colors.textPrimary }]}>
+                Campus Navigator
+              </Text>
             </View>
           </View>
 
-          {/* Connection status pill */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push('/modal/server-settings')}
-          >
-            <StatusPill status={connectionState} type="CONNECTION" />
-          </TouchableOpacity>
+          <View style={styles.headerRightActions}>
+            {/* Subtle Appearance Mode Toggle Pill */}
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                toggleAppearanceMode();
+              }}
+              style={[
+                styles.modePill,
+                {
+                  backgroundColor: isGlass
+                    ? 'rgba(255, 255, 255, 0.78)'
+                    : theme.colors.surface,
+                  borderColor: theme.colors.borderSubtle,
+                },
+              ]}
+            >
+              <Ionicons
+                name={isGlass ? 'sparkles' : 'sunny-outline'}
+                size={13}
+                color={theme.colors.primary}
+              />
+              <Text style={[styles.modePillText, { color: theme.colors.primary }]}>
+                {isGlass ? 'Glass' : 'Clean'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Unobtrusive Connection Status Indicator */}
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={() => router.push('/modal/server-settings')}
+              style={[
+                styles.connectionBadge,
+                {
+                  backgroundColor: isLive ? theme.colors.successBg : theme.colors.surfaceMuted,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: isLive ? '#16A34A' : '#64748B' },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.connectionText,
+                  { color: isLive ? theme.colors.success : theme.colors.textSecondary },
+                ]}
+              >
+                {isLive ? 'Live' : 'Offline'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* 2. Hero Search Bar (Swiggy / Maps Style) */}
+        {/* 2. Primary Search Bar */}
         <View style={styles.searchSection}>
           <SearchBar
             value={searchVal}
             onChangeText={setSearchVal}
-            placeholder="Search 28 buildings, 339 faculty, labs..."
+            placeholder="Search buildings, faculty, cabins, labs..."
             onPress={() => router.push('/(tabs)/map')}
             editable={false}
           />
         </View>
 
-        {/* 3. Hero Campus Map Exploration Card */}
-        <TouchableOpacity
-          activeOpacity={0.92}
-          style={styles.heroMapCard}
-          onPress={() => router.push('/(tabs)/map')}
+        {/* 3. Campus Exploration Hero with Custom Isometric PNG */}
+        <AdaptiveSurface
+          variant={isGlass ? 'floating' : 'card'}
+          style={styles.heroCard}
         >
-          <View style={styles.heroMapHeader}>
-            <View>
-              <View style={styles.badgeRow}>
-                <Ionicons name="compass" size={13} color={Colors.accentBlue} />
-                <Text style={styles.badgeText}>Verified OpenStreetMap Campus GIS</Text>
+          <TouchableOpacity
+            activeOpacity={0.94}
+            onPress={() => router.push('/(tabs)/map')}
+          >
+            <View style={styles.heroImageContainer}>
+              <Image
+                source={require('../../assets/campus-hero.png')}
+                style={styles.heroIllustration}
+                resizeMode="cover"
+              />
+              <View style={styles.heroOverlayTag}>
+                <Ionicons name="compass" size={13} color={theme.colors.primary} />
+                <Text style={[styles.heroOverlayTagText, { color: theme.colors.primary }]}>
+                  Interactive Campus Map
+                </Text>
               </View>
-              <Text style={styles.heroTitle}>Navigate RVCE Campus</Text>
-              <Text style={styles.heroDesc}>
-                Mysuru Road Entrance, Academic Blocks, Food Courts & Hostels
-              </Text>
             </View>
-          </View>
 
-          <View style={styles.heroCtaRow}>
-            <TouchableOpacity
-              activeOpacity={0.82}
-              style={styles.heroPill}
-              onPress={() => router.push('/(tabs)/map?directions=1')}
-            >
-              <Ionicons name="navigate" size={14} color="#059669" />
-              <Text style={styles.heroPillText}>Route A → B</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.82}
-              style={styles.heroPill}
-              onPress={() => router.push('/(tabs)/map?directions=1')}
-            >
-              <Ionicons name="walk" size={15} color={Colors.primary} />
-              <Text style={styles.heroPillText}>Walking / Road</Text>
-            </TouchableOpacity>
-            <View style={styles.openMapBtn}>
-              <Text style={styles.openMapText}>Explore</Text>
-              <Ionicons name="arrow-forward" size={14} color={Colors.textInverse} />
+            <View style={styles.heroContentBody}>
+              <View style={styles.heroTextCol}>
+                <Text style={[styles.heroTitle, { color: theme.colors.textPrimary }]}>
+                  Explore RVCE Campus
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: theme.colors.textSecondary }]}>
+                  Navigate academic blocks, paths, food courts, and multi-floor indoor maps.
+                </Text>
+              </View>
+
+              <View style={styles.heroActionsRow}>
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={[styles.primaryCtaBtn, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => router.push('/(tabs)/map')}
+                >
+                  <Text style={styles.primaryCtaText}>Explore Campus</Text>
+                  <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[
+                    styles.secondaryActionBtn,
+                    {
+                      backgroundColor: theme.colors.primarySoft,
+                    },
+                  ]}
+                  onPress={() => router.push('/(tabs)/map?directions=1')}
+                >
+                  <Ionicons name="navigate-outline" size={15} color={theme.colors.primary} />
+                  <Text style={[styles.secondaryActionText, { color: theme.colors.primary }]}>
+                    Directions
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </AdaptiveSurface>
 
-        {/* 4. Quick Category Pills */}
+        {/* 4. Compact Quick Services */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Campus Quick Services</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            Quick Services
+          </Text>
         </View>
+
         <View style={styles.quickGrid}>
-          <TouchableOpacity
-            style={styles.quickCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/directory')}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#EEF2FF' }]}>
-              <Ionicons name="people" size={22} color="#4F46E5" />
-            </View>
-            <Text style={styles.quickCardTitle}>Faculty</Text>
-            <Text style={styles.quickCardSub}>339 Profiles</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/services')}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#F0FDF4' }]}>
-              <Ionicons name="restaurant" size={22} color="#16A34A" />
-            </View>
-            <Text style={styles.quickCardTitle}>Cafeterias</Text>
-            <Text style={styles.quickCardSub}>Food Courts</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/services?tab=VISITOR_PASS')}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="shield-checkmark" size={22} color="#D97706" />
-            </View>
-            <Text style={styles.quickCardTitle}>Visitor Pass</Text>
-            <Text style={styles.quickCardSub}>Gate Entry</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/services')}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#FEE2E2' }]}>
-              <Ionicons name="medkit" size={22} color="#DC2626" />
-            </View>
-            <Text style={styles.quickCardTitle}>Clinic</Text>
-            <Text style={styles.quickCardSub}>24x7 First Aid</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 5. Key Verified Destinations */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Key Campus Destinations</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/map')}>
-            <Text style={styles.viewAllText}>View on Map</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.landmarksList}>
-          {featured.map((b) => (
+          {[
+            {
+              key: 'faculty',
+              title: 'Faculty',
+              icon: 'people-outline' as const,
+              tint: '#27447E',
+              bg: '#EDF2FC',
+              onPress: () => router.push('/(tabs)/directory'),
+            },
+            {
+              key: 'cafeterias',
+              title: 'Cafeterias',
+              icon: 'restaurant-outline' as const,
+              tint: '#15803D',
+              bg: '#DCFCE7',
+              onPress: () => router.push('/(tabs)/services'),
+            },
+            {
+              key: 'visitor',
+              title: 'Visitor Pass',
+              icon: 'id-card-outline' as const,
+              tint: '#B45309',
+              bg: '#FEF3C7',
+              onPress: () => router.push('/(tabs)/services?tab=VISITOR_PASS'),
+            },
+            {
+              key: 'clinic',
+              title: '24x7 Clinic',
+              icon: 'medkit-outline' as const,
+              tint: '#B91C1C',
+              bg: '#FEE2E2',
+              onPress: () => router.push('/(tabs)/services'),
+            },
+          ].map((item) => (
             <TouchableOpacity
-              key={`feat-${b.building_id}`}
-              style={styles.landmarkCard}
-              activeOpacity={0.85}
-              onPress={() => {
-                selectBuilding(b);
-                router.push('/(tabs)/map');
-              }}
+              key={item.key}
+              activeOpacity={0.82}
+              onPress={item.onPress}
+              style={[
+                styles.quickTile,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.borderSubtle,
+                },
+                theme.shadows.card,
+              ]}
             >
-              <View style={styles.landmarkIcon}>
-                <Ionicons name="business" size={20} color={Colors.primary} />
+              <View style={[styles.quickIconCircle, { backgroundColor: item.bg }]}>
+                <Ionicons name={item.icon} size={20} color={item.tint} />
               </View>
-              <View style={styles.landmarkBody}>
-                <Text style={styles.landmarkName} numberOfLines={1}>
-                  {b.building_name}
-                </Text>
-                <Text style={styles.landmarkDesc} numberOfLines={1}>
-                  {b.building_code} • {b.total_floors} Floors
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Text
+                style={[styles.quickTileLabel, { color: theme.colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* 5. Progressive Disclosure: Indoor Navigation & Campus Assistant */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            Indoor & Smart Assistance
+          </Text>
+        </View>
+
+        <View style={styles.featureCardsStack}>
+          {/* Clean Indoor Navigation Entry Point (replaces crowded raw cabin chip dump) */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => jumpToCabin({ buildingId: 7, floorId: 18 })}
+          >
+            <AdaptiveSurface variant="card" style={styles.cleanEntryCard}>
+              <View style={[styles.entryIconBox, { backgroundColor: theme.colors.primarySoft }]}>
+                <Ionicons name="layers-outline" size={22} color={theme.colors.primary} />
+              </View>
+              <View style={styles.entryBody}>
+                <View style={styles.entryTitleRow}>
+                  <Text style={[styles.entryTitle, { color: theme.colors.textPrimary }]}>
+                    Indoor Navigation
+                  </Text>
+                  <View style={[styles.pillTag, { backgroundColor: theme.colors.successBg }]}>
+                    <Text style={[styles.pillTagText, { color: theme.colors.success }]}>
+                      GF • 1F • 2F
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.entrySubtitle, { color: theme.colors.textSecondary }]}>
+                  Find rooms, faculty cabins, and laboratories inside campus buildings
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+            </AdaptiveSurface>
+          </TouchableOpacity>
+
+          {/* Clean Conversational Campus Assistant Entry Point */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setAssistantVisible(true);
+            }}
+          >
+            <AdaptiveSurface variant="card" style={styles.cleanEntryCard}>
+              <View style={[styles.entryIconBox, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="chatbubble-ellipses-outline" size={22} color="#2563EB" />
+              </View>
+              <View style={styles.entryBody}>
+                <View style={styles.entryTitleRow}>
+                  <Text style={[styles.entryTitle, { color: theme.colors.textPrimary }]}>
+                    Campus Assistant
+                  </Text>
+                  <View style={[styles.pillTag, { backgroundColor: '#DBEAFE' }]}>
+                    <Text style={[styles.pillTagText, { color: '#1D4ED8' }]}>Ask</Text>
+                  </View>
+                </View>
+                <Text style={[styles.entrySubtitle, { color: theme.colors.textSecondary }]}>
+                  Ask where any professor sits, check cabin rosters, or get walking routes
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+            </AdaptiveSurface>
+          </TouchableOpacity>
+        </View>
+
+        {/* 6. Key Campus Landmarks / Recently Explored */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            Popular Destinations
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/map')}>
+            <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        <AdaptiveSurface variant="card" style={styles.destinationsGroupCard}>
+          {keyDestinations.map((b, idx) => {
+            const isEEE = b.building_id === 7;
+            const isLast = idx === keyDestinations.length - 1;
+            return (
+              <TouchableOpacity
+                key={`dest-${b.building_id}`}
+                activeOpacity={0.78}
+                style={[
+                  styles.destinationRow,
+                  !isLast && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: theme.colors.divider,
+                  },
+                ]}
+                onPress={() => {
+                  selectBuilding(b);
+                  router.push({
+                    pathname: '/(tabs)/map',
+                    params: { buildingId: String(b.building_id) },
+                  });
+                }}
+              >
+                <View
+                  style={[
+                    styles.destinationIconWrap,
+                    { backgroundColor: theme.colors.surfaceMuted },
+                  ]}
+                >
+                  <Ionicons
+                    name={isEEE ? 'layers-outline' : 'business-outline'}
+                    size={18}
+                    color={theme.colors.primary}
+                  />
+                </View>
+                <View style={styles.destinationInfo}>
+                  <Text
+                    style={[styles.destinationName, { color: theme.colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {b.building_name}
+                  </Text>
+                  <Text
+                    style={[styles.destinationMeta, { color: theme.colors.textMuted }]}
+                    numberOfLines={1}
+                  >
+                    {b.building_code} • {b.total_floors}{' '}
+                    {b.total_floors === 1 ? 'Floor' : 'Floors'}
+                    {isEEE ? ' • Indoor Floor Maps Available' : ''}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            );
+          })}
+        </AdaptiveSurface>
       </ScrollView>
+
+      <SmartLabShowcaseModal
+        visible={assistantVisible}
+        onClose={() => setAssistantVisible(false)}
+        onJumpToCabin={jumpToCabin}
+      />
     </SafeAreaView>
   );
 }
@@ -204,207 +433,271 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+    paddingHorizontal: 18,
+    paddingBottom: 32,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.md,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 11,
   },
   logo: {
     width: 38,
     height: 38,
-    borderRadius: Radius.md,
+    borderRadius: 11,
+  },
+  greetingContext: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginBottom: 1,
   },
   brandName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.35,
   },
-  brandSubtitle: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '500',
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  searchSection: {
-    marginVertical: Spacing.sm,
-  },
-  heroMapCard: {
-    backgroundColor: Colors.card,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    marginVertical: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  heroMapHeader: {
-    marginBottom: Spacing.md,
-  },
-  badgeRow: {
+  modePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.accentBlue,
-    textTransform: 'uppercase',
+  modePillText: {
+    fontSize: 11.5,
+    fontWeight: '600',
   },
-  heroTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.primary,
-    marginBottom: 4,
-    letterSpacing: -0.4,
-  },
-  heroDesc: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  heroCtaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  heroPill: {
+  connectionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Colors.cardSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
-  heroPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  openMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: Radius.full,
   },
-  openMapText: {
-    fontSize: 12,
+  statusDot: {
+    width: 6.5,
+    height: 6.5,
+    borderRadius: 4,
+  },
+  connectionText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  searchSection: {
+    marginBottom: 18,
+  },
+  heroCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  heroImageContainer: {
+    width: '100%',
+    height: 158,
+    backgroundColor: '#EDF3FC',
+    position: 'relative',
+  },
+  heroIllustration: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlayTag: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+  },
+  heroOverlayTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  heroContentBody: {
+    padding: 16,
+  },
+  heroTextCol: {
+    marginBottom: 14,
+  },
+  heroTitle: {
+    fontSize: 19,
     fontWeight: '700',
-    color: Colors.textInverse,
+    letterSpacing: -0.3,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  heroActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  primaryCtaBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    borderRadius: 13,
+  },
+  primaryCtaText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  secondaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    height: 44,
+    paddingHorizontal: 15,
+    borderRadius: 13,
+  },
+  secondaryActionText: {
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginTop: 22,
+    marginBottom: 11,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    letterSpacing: -0.2,
   },
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
   },
   quickGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: Spacing.xs,
+    gap: 10,
   },
-  quickCard: {
+  quickTile: {
     flex: 1,
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
-    paddingVertical: Spacing.md,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  quickIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.xs,
+    marginBottom: 8,
   },
-  quickCardTitle: {
+  quickTileLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontWeight: '600',
   },
-  quickCardSub: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 2,
+  featureCardsStack: {
+    gap: 10,
   },
-  landmarksList: {
-    gap: Spacing.xs,
-  },
-  landmarkCard: {
+  cleanEntryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: 14,
+    borderRadius: 16,
   },
-  landmarkIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.primaryLight,
+  entryIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.md,
+    marginRight: 13,
   },
-  landmarkBody: {
+  entryBody: {
     flex: 1,
+    marginRight: 8,
   },
-  landmarkName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+  entryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 3,
   },
-  landmarkDesc: {
+  entryTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pillTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  pillTagText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  entrySubtitle: {
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  destinationsGroupCard: {
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  destinationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+  },
+  destinationIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  destinationInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  destinationName: {
+    fontSize: 14.5,
+    fontWeight: '600',
+  },
+  destinationMeta: {
     fontSize: 12,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 });

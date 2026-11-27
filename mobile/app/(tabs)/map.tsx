@@ -16,7 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { BlurView } from 'expo-blur';
 import { useCampusData } from '../../src/context/CampusDataContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import {
   NativeCampusMap,
   getFacilityColor,
@@ -111,6 +113,7 @@ export default function MapScreen() {
     clearRoute,
     searchCampus,
   } = useCampusData();
+  const { isGlass, theme } = useTheme();
 
   // Search & Explore State
   const [searchQuery, setSearchQuery] = useState('');
@@ -734,14 +737,21 @@ export default function MapScreen() {
                   return (
                     <TouchableOpacity
                       key={chip.key}
-                      style={[styles.catChip, active && styles.catChipActive]}
+                      style={[
+                        styles.catChip,
+                        isGlass && !active && {
+                          backgroundColor: 'rgba(255, 255, 255, 0.80)',
+                          borderColor: 'rgba(255, 255, 255, 0.65)',
+                        },
+                        active && styles.catChipActive,
+                      ]}
                       activeOpacity={0.85}
                       onPress={() => setCategoryFilter(chip.key)}
                     >
                       <Ionicons
                         name={chip.icon}
                         size={13}
-                        color={active ? '#FFFFFF' : Colors.primary}
+                        color={active ? '#FFFFFF' : theme.colors.primary}
                       />
                       <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
                         {chip.label}
@@ -754,7 +764,17 @@ export default function MapScreen() {
 
             {/* Search Suggestions Dropdown */}
             {isSearching && (
-              <View style={styles.suggestionsDropdown}>
+              <View
+                style={[
+                  styles.suggestionsDropdown,
+                  isGlass && {
+                    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                    borderColor: 'rgba(255, 255, 255, 0.65)',
+                    overflow: 'hidden',
+                  },
+                ]}
+              >
+                {isGlass && <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />}
                 {searchResults.length === 0 ? (
                   <View style={styles.emptySearchBox}>
                     <Ionicons name="search-outline" size={20} color={Colors.textMuted} />
@@ -808,7 +828,17 @@ export default function MapScreen() {
           </>
         ) : (
           /* GOOGLE-MAPS-STYLE FROM (A) & TO (B) CAMPUS DIRECTIONS PLANNER */
-          <View style={styles.plannerCard}>
+          <View
+            style={[
+              styles.plannerCard,
+              isGlass && {
+                backgroundColor: 'rgba(255, 255, 255, 0.84)',
+                borderColor: 'rgba(255, 255, 255, 0.65)',
+                overflow: 'hidden',
+              },
+            ]}
+          >
+            {isGlass && <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />}
             {/* Planner Top Bar: Back + Walking/Vehicle Switcher + Swap + Close */}
             <View style={styles.plannerTopRow}>
               <TouchableOpacity
@@ -1006,7 +1036,17 @@ export default function MapScreen() {
 
       {/* 3. DIRECTIONS BOTTOM CARD: Route Summary, Steps & Prompt */}
       {directionsOpen && (
-        <View style={styles.routeSheet}>
+        <View
+          style={[
+            styles.routeSheet,
+            isGlass && {
+              backgroundColor: 'rgba(255, 255, 255, 0.86)',
+              borderColor: 'rgba(255, 255, 255, 0.68)',
+              overflow: 'hidden',
+            },
+          ]}
+        >
+          {isGlass && <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />}
           <TouchableOpacity
             style={styles.sheetGrabArea}
             activeOpacity={0.8}
@@ -1165,7 +1205,17 @@ export default function MapScreen() {
 
       {/* 4. EXPLORE MODE DESTINATION DETAILS SHEET (When user taps a building/facility on map) */}
       {!directionsOpen && activeDestination && (
-        <View style={styles.bottomSheet}>
+        <View
+          style={[
+            styles.bottomSheet,
+            isGlass && {
+              backgroundColor: 'rgba(255, 255, 255, 0.86)',
+              borderColor: 'rgba(255, 255, 255, 0.68)',
+              overflow: 'hidden',
+            },
+          ]}
+        >
+          {isGlass && <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />}
           <View style={styles.dragPill} />
 
           <View style={styles.sheetHeader}>

@@ -10,6 +10,7 @@ from sqlalchemy.engine import Connection
 
 from backend.app.config.database import get_db_connection, get_mongo_db
 from backend.app.config.settings import get_settings
+from backend.app.services.campus_rag import answer_campus_query
 from backend.app.services.routing import compute_campus_route
 
 router = APIRouter(tags=["Public Campus Navigation & Directory"])
@@ -166,6 +167,117 @@ async def get_building_detail(
     }
 
 
+def _build_resilient_floor_overlay(
+    floor_row: Any,
+    plan_row: Any,
+    rooms: list[Any],
+) -> dict[str, Any] | None:
+    """
+    Provides an exact architectural vector overlay fallback when MongoDB is offline,
+    keeping EEE 3-floor interactive SVG maps and all approved floor plans operational.
+    """
+    if not plan_row or not rooms:
+        return None
+
+    fid = int(floor_row["floor_id"])
+    bid = int(floor_row["building_id"])
+    fnum = int(floor_row["floor_number"])
+
+    eee_bounds_by_floor: dict[int, dict[str, dict[str, int]]] = {
+        0: {
+            "EEE-006": {"x": 60, "y": 70, "w": 300, "h": 75},
+            "EEE-005": {"x": 60, "y": 155, "w": 300, "h": 75},
+            "EEE-004": {"x": 60, "y": 240, "w": 300, "h": 75},
+            "EEE-003": {"x": 60, "y": 325, "w": 300, "h": 75},
+            "EEE-002": {"x": 60, "y": 410, "w": 300, "h": 75},
+            "EEE-001": {"x": 60, "y": 495, "w": 300, "h": 85},
+            "EEE-007": {"x": 380, "y": 70, "w": 240, "h": 110},
+            "EEE-010": {"x": 640, "y": 70, "w": 300, "h": 65},
+            "EEE-011": {"x": 640, "y": 150, "w": 300, "h": 150},
+            "EEE-011A": {"x": 640, "y": 315, "w": 300, "h": 120},
+            "EEE-011B": {"x": 640, "y": 450, "w": 300, "h": 130},
+        },
+        1: {
+            "EEE-105": {"x": 60, "y": 70, "w": 300, "h": 95},
+            "EEE-104": {"x": 60, "y": 175, "w": 300, "h": 95},
+            "EEE-103": {"x": 60, "y": 280, "w": 300, "h": 95},
+            "EEE-102": {"x": 60, "y": 385, "w": 300, "h": 95},
+            "EEE-101": {"x": 60, "y": 490, "w": 300, "h": 90},
+            "EEE-107": {"x": 380, "y": 70, "w": 240, "h": 105},
+            "EEE-117": {"x": 380, "y": 495, "w": 240, "h": 85},
+            "EEE-108": {"x": 640, "y": 70, "w": 300, "h": 65},
+            "EEE-112": {"x": 640, "y": 145, "w": 300, "h": 75},
+            "EEE-113": {"x": 640, "y": 230, "w": 300, "h": 75},
+            "EEE-114": {"x": 640, "y": 315, "w": 300, "h": 75},
+            "EEE-115": {"x": 640, "y": 400, "w": 300, "h": 90},
+            "EEE-116": {"x": 640, "y": 500, "w": 300, "h": 80},
+        },
+        2: {
+            "EEE-205": {"x": 60, "y": 70, "w": 300, "h": 80},
+            "EEE-204": {"x": 60, "y": 160, "w": 300, "h": 80},
+            "EEE-203": {"x": 60, "y": 250, "w": 300, "h": 80},
+            "EEE-202B": {"x": 60, "y": 340, "w": 300, "h": 80},
+            "EEE-202A": {"x": 60, "y": 430, "w": 300, "h": 80},
+            "EEE-201": {"x": 60, "y": 520, "w": 300, "h": 80},
+            "EEE-207": {"x": 380, "y": 70, "w": 240, "h": 105},
+            "EEE-215": {"x": 380, "y": 495, "w": 240, "h": 85},
+            "EEE-208": {"x": 640, "y": 70, "w": 300, "h": 65},
+            "EEE-ECH": {"x": 640, "y": 150, "w": 300, "h": 230},
+            "EEE-214": {"x": 640, "y": 395, "w": 300, "h": 185},
+        },
+    }
+
+    bounds_map = eee_bounds_by_floor.get(fnum, {}) if floor_row["building_code"] == "EEE" else {}
+    ov_rooms: list[dict[str, Any]] = []
+
+    for idx, r in enumerate(rooms):
+        rnum = str(r["room_number"])
+        b = bounds_map.get(rnum)
+        if not b:
+            col = idx % 2
+            row_i = idx // 2
+            b = {
+                "x": 70 if col == 0 else 530,
+                "y": 75 + row_i * 95,
+                "w": 400,
+                "h": 80,
+            }
+        ov_rooms.append(
+            {
+                "room_id": int(r["room_id"]),
+                "room_number": rnum,
+                "label": str(r["room_name"]),
+                "category": str(r["room_type"]),
+                "bounds": b,
+            }
+        )
+
+    return {
+        "floor_plan_id": int(plan_row["floor_plan_id"]),
+        "floor_id": fid,
+        "building_id": bid,
+        "coordinate_space": str(plan_row["coordinate_space"] or "NORMALIZED_1000"),
+        "is_schematic_sample": bool(plan_row["is_schematic_sample"]),
+        "canvas": {
+            "width": int(plan_row["canvas_width"] or 1000),
+            "height": int(plan_row["canvas_height"] or 680),
+        },
+        "corridors": [
+            {"x": 360, "y": 60, "w": 20, "h": 540, "label": "West Wing Corridor"},
+            {"x": 620, "y": 60, "w": 20, "h": 540, "label": "East Wing Corridor"},
+            {"x": 360, "y": 180, "w": 280, "h": 20, "label": "Cross Corridor North"},
+            {"x": 360, "y": 470, "w": 280, "h": 20, "label": "Cross Corridor South"},
+        ],
+        "landmarks": [
+            {"type": "STAIRS", "x": 370, "y": 50, "label": "North Staircase"},
+            {"type": "STAIRS", "x": 370, "y": 610, "label": "South Staircase"},
+            {"type": "LIFT", "x": 630, "y": 50, "label": "Elevator"},
+            {"type": "ENTRANCE", "x": 500, "y": 630, "label": "Main Floor Access"},
+        ],
+        "rooms": ov_rooms,
+    }
+
+
 @router.get("/floors/{floor_id}/floor-plan")
 async def get_floor_plan_and_rooms(
     floor_id: int,
@@ -226,6 +338,9 @@ async def get_floor_plan_and_rooms(
             overlay = ov_doc
         except Exception:
             overlay = None
+
+        if overlay is None:
+            overlay = _build_resilient_floor_overlay(floor_row, plan_row, rooms)
 
     return {
         "floor": _serialize_row(floor_row),
@@ -588,3 +703,38 @@ async def get_campus_navigation_route(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/assistant/ask")
+async def ask_campus_rag_assistant(
+    payload: dict[str, Any],
+    conn: Connection = Depends(get_db_connection),
+) -> dict[str, Any]:
+    q = str(payload.get("query") or payload.get("q") or "").strip()
+    if not q:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please enter a question.")
+    history = payload.get("history") if isinstance(payload.get("history"), list) else None
+    result = await answer_campus_query(q, conn=conn, history=history)
+    try:
+        mdb = get_mongo_db()
+        await mdb.search_telemetry.insert_one(
+            {
+                "query_text": q.lower(),
+                "category_filter": "AI_RAG_ASSISTANT",
+                "result_count": len(result.get("cards", [])),
+                "duration_ms": result.get("latency_ms", 0.0),
+                "created_at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
+    return result
+
+
+@router.get("/assistant/ask")
+async def ask_campus_rag_assistant_get(
+    q: str = Query(..., min_length=1, max_length=300),
+    conn: Connection = Depends(get_db_connection),
+) -> dict[str, Any]:
+    return await answer_campus_query(q, conn=conn, history=None)
+

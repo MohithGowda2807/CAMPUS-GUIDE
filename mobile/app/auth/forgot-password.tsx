@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useAuth } from '../../src/context/AuthContext';
 import { validateRvceInstitutionalEmail } from '../../src/services/cognitoAuth';
 import { Colors } from '../../src/theme/colors';
@@ -51,7 +52,7 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <PortalBrandHeader
           title="Account Recovery"
           subtitle="Enter your @rvce.edu.in email address. If an eligible account exists, a one-time recovery verification code will be sent to your inbox."
@@ -96,7 +97,7 @@ export default function ForgotPasswordScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

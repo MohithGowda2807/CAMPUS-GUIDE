@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { CampusDataProvider } from '../src/context/CampusDataContext';
 import { AuthProvider } from '../src/context/AuthContext';
+import { ThemeProvider } from '../src/context/ThemeContext';
 import { Colors } from '../src/theme/colors';
 
 // Prevent splash screen from auto-hiding until ready
@@ -23,9 +24,10 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <CampusDataProvider>
-            <StatusBar style="dark" />
+        <ThemeProvider>
+          <AuthProvider>
+            <CampusDataProvider>
+              <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
@@ -51,9 +53,10 @@ export default function RootLayout() {
                   animation: 'slide_from_bottom',
                 }}
               />
-            </Stack>
-          </CampusDataProvider>
-        </AuthProvider>
+              </Stack>
+            </CampusDataProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

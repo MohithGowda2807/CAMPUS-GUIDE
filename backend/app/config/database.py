@@ -42,7 +42,8 @@ def get_mongo_client() -> AsyncIOMotorClient:
         settings = get_settings()
         _mongo_client = AsyncIOMotorClient(
             settings.MONGODB_URI,
-            serverSelectionTimeoutMS=3000,
+            serverSelectionTimeoutMS=900,
+            connectTimeoutMS=900,
         )
         _mongo_loop = current_loop
     return _mongo_client

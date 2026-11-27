@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { StatusPill } from '../../src/components/StatusPill';
 import { useAuth } from '../../src/context/AuthContext';
 import { useCampusData } from '../../src/context/CampusDataContext';
@@ -128,7 +129,7 @@ export default function AvailabilityEditorScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <PortalBrandHeader
           title="My Availability"
           subtitle="Broadcast your current office availability with automatic time-window expiration."
@@ -247,7 +248,7 @@ export default function AvailabilityEditorScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

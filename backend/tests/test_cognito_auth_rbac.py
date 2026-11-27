@@ -21,6 +21,7 @@ from backend.app.auth.dev_oidc_sandbox import (
     SANDBOX_ISSUER,
     SANDBOX_KID,
     _PRIVATE_KEY as SANDBOX_PRIVATE_KEY,
+    _deterministic_totp_secret,
 )
 from backend.app.auth.security import reset_rate_limits_for_tests
 from backend.app.config.database import get_mysql_engine
@@ -82,6 +83,16 @@ def _mfa_login(email: str, password: str) -> dict:
         _TOTP_SECRETS[email] = base64.b32decode(b32 + "=" * ((8 - len(b32) % 8) % 8))
     else:
         assert body["challenge_name"] == "SOFTWARE_TOKEN_MFA"
+        if email not in _TOTP_SECRETS:
+            seed_subs = {
+                "sysadmin@rvce.edu.in": "00000000-0000-4000-8000-000000000001",
+                "facilities@rvce.edu.in": "00000000-0000-4000-8000-000000000002",
+                "security@rvce.edu.in": "00000000-0000-4000-8000-000000000003",
+                "hod.cse@rvce.edu.in": "00000000-0000-4000-8000-000000000004",
+                "faculty.cse@rvce.edu.in": "00000000-0000-4000-8000-000000000005",
+            }
+            if email in seed_subs:
+                _TOTP_SECRETS[email] = _deterministic_totp_secret(seed_subs[email], email)
     r2 = client.post(
         "/api/v1/dev-oidc/cognito/respond-mfa",
         json={"session": body["session"], "code": _totp_now(_TOTP_SECRETS[email])},

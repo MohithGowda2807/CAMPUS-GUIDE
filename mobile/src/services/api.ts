@@ -28,9 +28,13 @@ import {
   FALLBACK_DEPARTMENTS,
   FALLBACK_FACILITIES,
   FALLBACK_FACULTY,
+  FALLBACK_FLOORS_BY_BUILDING,
+  FALLBACK_FLOOR_PLANS_BY_FLOOR,
   FALLBACK_MAP_CONFIG,
+  FALLBACK_ROOMS_BY_ID,
 } from '../data/fallbackData';
 import { computeCampusRouteOffline } from './campusRouter';
+import { answerCampusQueryOffline, type AssistantResponse } from './campusRagEngine';
 import { cognitoClient, loadStoredSession, saveStoredSession, setAuthProviderConfig } from './cognitoAuth';
 
 const API_BASE_STORAGE_KEY = 'rvce_mobile_api_base';
@@ -278,15 +282,19 @@ export const campusApi = {
       const geom = FALLBACK_MAP_CONFIG.geometries.find((g) => g.mysql_id === buildingId) || null;
       const facilities = FALLBACK_FACILITIES.filter((f) => f.building_id === buildingId);
 
-      const floors = Array.from({ length: Math.max(1, b.total_floors) }, (_, idx) => ({
-        floor_id: b.building_id * 100 + idx,
-        floor_number: idx,
-        floor_name: idx === 0 ? 'Ground Floor' : `Floor ${idx}`,
-        display_order: idx,
-        has_lift_access: b.is_accessible,
-        room_count: idx === 0 ? 4 : 3,
-        has_floor_plan: idx === 0,
-      }));
+      const realFloors = FALLBACK_FLOORS_BY_BUILDING[buildingId];
+      const floors =
+        realFloors && realFloors.length > 0
+          ? realFloors
+          : Array.from({ length: Math.max(1, b.total_floors) }, (_, idx) => ({
+              floor_id: b.building_id * 100 + idx,
+              floor_number: idx,
+              floor_name: idx === 0 ? 'Ground Floor' : `Floor ${idx}`,
+              display_order: idx,
+              has_lift_access: b.is_accessible,
+              room_count: idx === 0 ? 4 : 3,
+              has_floor_plan: idx === 0,
+            }));
 
       return {
         building: b,
@@ -301,6 +309,10 @@ export const campusApi = {
     try {
       return await request<FloorPlanResponse>(`/floors/${floorId}/floor-plan`, undefined, 3500);
     } catch {
+      const bundledPlan = FALLBACK_FLOOR_PLANS_BY_FLOOR[floorId];
+      if (bundledPlan) {
+        return bundledPlan;
+      }
       const buildingId = Math.max(1, Math.floor(floorId / 100));
       const floorNum = floorId % 100;
       const b = FALLBACK_BUILDINGS.find((x) => x.building_id === buildingId) || FALLBACK_BUILDINGS[0];
@@ -415,8 +427,10 @@ export const campusApi = {
     try {
       return await request<{ room: RoomItem; occupants: FacultyMember[] }>(`/rooms/${roomId}`, undefined, 3500);
     } catch {
+      const bundledRoom = FALLBACK_ROOMS_BY_ID[roomId];
+      const occupants = FALLBACK_FACULTY.filter((f) => f.office_room_id === roomId);
       return {
-        room: {
+        room: bundledRoom || {
           room_id: roomId,
           room_number: `RM-${roomId}`,
           room_name: 'Campus Room',
@@ -426,7 +440,7 @@ export const campusApi = {
           is_accessible: true,
           verification_status: 'SAMPLE_DEV',
         },
-        occupants: [],
+        occupants,
       };
     }
   },
@@ -556,18 +570,50 @@ export const campusApi = {
         }
       }
 
+      if (!category || category === 'ALL' || category === 'ROOM') {
+        for (const rm of Object.values(FALLBACK_ROOMS_BY_ID)) {
+          if (
+            rm.room_number.toLowerCase().includes(queryLower) ||
+            rm.room_name.toLowerCase().includes(queryLower) ||
+            (rm.description && rm.description.toLowerCase().includes(queryLower))
+          ) {
+            const b = FALLBACK_BUILDINGS.find((x) => x.building_id === rm.building_id);
+            results.push({
+              entity_type: 'ROOM',
+              id: rm.room_id,
+              title: `${rm.room_number} — ${rm.room_name}`,
+              subtitle: `${rm.building_name || ''} • ${rm.floor_name || ''}`,
+              building_id: rm.building_id ?? null,
+              floor_id: rm.floor_id ?? null,
+              room_id: rm.room_id,
+              latitude: b ? b.latitude : null,
+              longitude: b ? b.longitude : null,
+              verification_status: rm.verification_status,
+            });
+          }
+        }
+      }
+
       if (!category || category === 'ALL' || category === 'FACULTY') {
         for (const faculty of FALLBACK_FACULTY) {
           if (
             faculty.display_name.toLowerCase().includes(queryLower) ||
             faculty.employee_code.toLowerCase().includes(queryLower) ||
-            faculty.dept_name.toLowerCase().includes(queryLower)
+            faculty.dept_name.toLowerCase().includes(queryLower) ||
+            faculty.dept_code.toLowerCase().includes(queryLower) ||
+            (faculty.program_name && faculty.program_name.toLowerCase().includes(queryLower)) ||
+            (faculty.office_room_number && faculty.office_room_number.toLowerCase().includes(queryLower))
           ) {
+            const locSuffix = faculty.office_room_number
+              ? ` • ${faculty.office_room_number}`
+              : faculty.building_name
+              ? ` • ${faculty.building_name}`
+              : '';
             results.push({
               entity_type: 'FACULTY',
               id: faculty.staff_id,
               title: faculty.display_name,
-              subtitle: `${faculty.designation} • ${faculty.dept_code}${faculty.building_name ? ` • ${faculty.building_name}` : ''}`,
+              subtitle: `${faculty.designation} • ${faculty.dept_code}${locSuffix}`,
               building_id: faculty.building_id,
               floor_id: faculty.floor_id,
               room_id: faculty.office_room_id,
@@ -586,6 +632,24 @@ export const campusApi = {
         duration_ms: 1,
         results: results.slice(0, 30),
       };
+    }
+  },
+
+  askAssistant: async (
+    query: string,
+    history?: Array<{ context_topic?: string }>
+  ): Promise<AssistantResponse> => {
+    try {
+      return await request<AssistantResponse>(
+        '/assistant/ask',
+        {
+          method: 'POST',
+          body: JSON.stringify({ query, history }),
+        },
+        4000
+      );
+    } catch {
+      return answerCampusQueryOffline(query, history);
     }
   },
 

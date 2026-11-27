@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useAuth } from '../../src/context/AuthContext';
 import { Colors } from '../../src/theme/colors';
 import { Radius, Spacing } from '../../src/theme/spacing';
@@ -89,7 +90,7 @@ export default function MfaChallengeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <PortalBrandHeader
           title={
             isFirstTimeSetup
@@ -208,7 +209,7 @@ export default function MfaChallengeScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

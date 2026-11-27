@@ -16,16 +16,18 @@ import base64
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import hashlib
+import hmac
 import html
 import json
 import os
+from pathlib import Path
 import secrets
 import time
 from typing import Any
 from urllib.parse import urlencode
 import uuid
 
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.hazmat.primitives.twofactor.totp import TOTP
@@ -43,10 +45,41 @@ SANDBOX_CLIENT_ID = "rvce-mobile-public-client"
 SANDBOX_KID = "rvce-dev-rs256-key-1"
 ACCESS_TOKEN_TTL_SECONDS = 900  # Short-lived 15-minute access tokens
 
-_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_STATE_FILE = Path(__file__).resolve().parents[2] / ".dev_oidc_state.json"
+
+
+def _load_or_create_rsa_keypair() -> rsa.RSAPrivateKey:
+    """
+    Loads a persistent local development RSA-2048 keypair from `.dev_oidc_state.json`
+    so active mobile/web JWT sessions remain valid across uvicorn restarts.
+    """
+    if _STATE_FILE.exists():
+        try:
+            data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+            pem_str = data.get("rsa_private_pem", "")
+            if pem_str:
+                loaded = serialization.load_pem_private_key(pem_str.encode("utf-8"), password=None)
+                if isinstance(loaded, rsa.RSAPrivateKey):
+                    return loaded
+        except Exception:
+            pass
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+_PRIVATE_KEY = _load_or_create_rsa_keypair()
 _PUBLIC_KEY = _PRIVATE_KEY.public_key()
 _JWK_DICT: dict[str, Any] = json.loads(RSAAlgorithm.to_jwk(_PUBLIC_KEY))
 _JWK_DICT.update({"kid": SANDBOX_KID, "use": "sig", "alg": "RS256"})
+
+
+def _deterministic_totp_secret(sub: str, email: str) -> bytes:
+    """
+    Derives a deterministic 20-byte RFC-6238 TOTP secret for each seeded dev account
+    so the user's Google/Microsoft Authenticator app code stays identical forever
+    even if the state file is cleared or the server restarts.
+    """
+    seed_key = os.environ.get("RVCE_DEV_TOTP_MASTER_SEED", "rvce-campus-navigator-dev-totp-v1").encode("utf-8")
+    return hmac.new(seed_key, f"{sub}:{email.lower()}".encode("utf-8"), hashlib.sha1).digest()
 
 
 def get_sandbox_jwks() -> dict[str, Any]:
@@ -137,12 +170,62 @@ def _ensure_sandbox_allowed() -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not enabled.")
 
 
+def _save_sandbox_state() -> None:
+    """Persists dev OIDC identities, enrolled TOTP MFA status, and refresh tokens across restarts."""
+    try:
+        pem_bytes = _PRIVATE_KEY.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        identities_dump = []
+        for ident in _IDENTITIES_BY_SUB.values():
+            identities_dump.append(
+                {
+                    "sub": ident.sub,
+                    "email": ident.email,
+                    "full_name": ident.full_name,
+                    "salt_b64": base64.b64encode(ident.salt).decode("ascii"),
+                    "verifier_b64": base64.b64encode(ident.verifier).decode("ascii"),
+                    "email_verified": ident.email_verified,
+                    "totp_secret_b64": (
+                        base64.b64encode(ident.totp_secret).decode("ascii")
+                        if ident.totp_secret
+                        else None
+                    ),
+                    "totp_enabled": ident.totp_enabled,
+                    "pending_totp_secret_b64": (
+                        base64.b64encode(ident.pending_totp_secret).decode("ascii")
+                        if ident.pending_totp_secret
+                        else None
+                    ),
+                }
+            )
+        refresh_dump = [
+            {
+                "token_hash": r.token_hash,
+                "sub": r.sub,
+                "expires_at": r.expires_at,
+                "revoked": r.revoked,
+            }
+            for r in _REFRESH_TOKENS.values()
+            if not r.revoked and r.expires_at > time.time()
+        ]
+        payload = {
+            "rsa_private_pem": pem_bytes.decode("utf-8"),
+            "identities": identities_dump,
+            "refresh_tokens": refresh_dump,
+        }
+        _STATE_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _bootstrap_dev_identities() -> None:
     global _BOOTSTRAPPED
     if _BOOTSTRAPPED:
         return
     _BOOTSTRAPPED = True
-    # Ephemeral RAM-only dev accounts matching deterministic seed `cognito_sub` UUIDs for local evaluation
     dev_initial_cred = os.environ.get("RVCE_DEV_SANDBOX_INIT_CRED", "RvceStaff#2026")
     seeds = [
         ("00000000-0000-4000-8000-000000000001", "sysadmin@rvce.edu.in", "RVCE Portal Institutional Administrator"),
@@ -152,7 +235,8 @@ def _bootstrap_dev_identities() -> None:
         ("00000000-0000-4000-8000-000000000005", "faculty.cse@rvce.edu.in", "Senior Faculty Member — CSE"),
     ]
     for sub, email, name in seeds:
-        salt = os.urandom(16)
+        salt = hashlib.sha256(f"salt:{sub}:{email}".encode("utf-8")).digest()[:16]
+        det_secret = _deterministic_totp_secret(sub, email)
         ident = _SandboxIdentity(
             sub=sub,
             email=email,
@@ -160,9 +244,56 @@ def _bootstrap_dev_identities() -> None:
             salt=salt,
             verifier=_derive_ram_verifier(dev_initial_cred, salt),
             email_verified=True,
+            pending_totp_secret=det_secret,
         )
         _IDENTITIES_BY_EMAIL[email] = ident
         _IDENTITIES_BY_SUB[sub] = ident
+
+    # Restore persisted TOTP enrolment, custom registered accounts, and refresh tokens from disk
+    if _STATE_FILE.exists():
+        try:
+            saved = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+            for item in saved.get("identities", []):
+                sub = str(item["sub"])
+                email = str(item["email"]).lower()
+                salt = base64.b64decode(item["salt_b64"])
+                verifier = base64.b64decode(item["verifier_b64"])
+                totp_sec = (
+                    base64.b64decode(item["totp_secret_b64"])
+                    if item.get("totp_secret_b64")
+                    else None
+                )
+                pend_sec = (
+                    base64.b64decode(item["pending_totp_secret_b64"])
+                    if item.get("pending_totp_secret_b64")
+                    else _deterministic_totp_secret(sub, email)
+                )
+                ident = _SandboxIdentity(
+                    sub=sub,
+                    email=email,
+                    full_name=str(item.get("full_name", email)),
+                    salt=salt,
+                    verifier=verifier,
+                    email_verified=bool(item.get("email_verified", True)),
+                    totp_secret=totp_sec,
+                    totp_enabled=bool(item.get("totp_enabled", False)),
+                    pending_totp_secret=pend_sec,
+                )
+                _IDENTITIES_BY_EMAIL[email] = ident
+                _IDENTITIES_BY_SUB[sub] = ident
+            for rt in saved.get("refresh_tokens", []):
+                if float(rt.get("expires_at", 0)) > time.time() and not rt.get("revoked", False):
+                    rec = _RefreshRecord(
+                        token_hash=str(rt["token_hash"]),
+                        sub=str(rt["sub"]),
+                        expires_at=float(rt["expires_at"]),
+                        revoked=False,
+                    )
+                    _REFRESH_TOKENS[rec.token_hash] = rec
+        except Exception:
+            pass
+    else:
+        _save_sandbox_state()
 
 
 def _mint_cognito_tokens(ident: _SandboxIdentity, amr: list[str], nonce: str | None = None) -> dict[str, Any]:
@@ -213,6 +344,7 @@ def _mint_cognito_tokens(ident: _SandboxIdentity, amr: list[str], nonce: str | N
         sub=ident.sub,
         expires_at=time.time() + 86400 * 7,
     )
+    _save_sandbox_state()
 
     return {
         "access_token": access_token,
@@ -366,7 +498,7 @@ def oauth2_authorize_submit(
 
     if not ident.totp_enabled:
         if not ident.pending_totp_secret:
-            ident.pending_totp_secret = os.urandom(20)
+            ident.pending_totp_secret = _deterministic_totp_secret(ident.sub, ident.email)
         if not totp_code or not verify_totp_code(ident.pending_totp_secret, totp_code):
             b32_secret = base64.b32encode(ident.pending_totp_secret).decode("ascii").rstrip("=")
             totp_obj = TOTP(ident.pending_totp_secret, 6, SHA1(), 30)
@@ -426,6 +558,7 @@ def oauth2_authorize_submit(
         ident.totp_secret = ident.pending_totp_secret
         ident.pending_totp_secret = None
         ident.totp_enabled = True
+        _save_sandbox_state()
     else:
         if not ident.totp_secret or not verify_totp_code(ident.totp_secret, totp_code):
             safe_email = html.escape(ident.email)
@@ -617,6 +750,7 @@ async def sandbox_cognito_operation(operation: str, request: Request) -> dict[st
             raise HTTPException(status_code=400, detail="Invalid or expired email verification code.")
         ident.email_verified = True
         ident.verification_code = None
+        _save_sandbox_state()
         return {"confirmed": True, "user_sub": ident.sub}
 
     if operation == "resend-confirmation-code":
@@ -660,7 +794,7 @@ async def sandbox_cognito_operation(operation: str, request: Request) -> dict[st
 
         # First-time login: Mandatory Authenticator App (TOTP) Enrolment Challenge (`MFA_SETUP`)
         if not ident.pending_totp_secret:
-            ident.pending_totp_secret = os.urandom(20)
+            ident.pending_totp_secret = _deterministic_totp_secret(ident.sub, ident.email)
         b32_secret = base64.b32encode(ident.pending_totp_secret).decode("ascii").rstrip("=")
         totp = TOTP(ident.pending_totp_secret, 6, SHA1(), 30)
         uri = totp.get_provisioning_uri(ident.email, "RVCE Campus Navigator")
@@ -738,6 +872,7 @@ async def sandbox_cognito_operation(operation: str, request: Request) -> dict[st
         for r in _REFRESH_TOKENS.values():
             if r.sub == ident.sub:
                 r.revoked = True
+        _save_sandbox_state()
         return {"reset": True}
 
     if operation == "associate-totp":
@@ -790,6 +925,7 @@ async def sandbox_cognito_operation(operation: str, request: Request) -> dict[st
         ident.totp_secret = ident.pending_totp_secret
         ident.pending_totp_secret = None
         ident.totp_enabled = True
+        _save_sandbox_state()
         return {"mfa_enabled": True}
 
     if operation == "global-sign-out":

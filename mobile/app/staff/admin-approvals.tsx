@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useAuth } from '../../src/context/AuthContext';
 import { campusApi } from '../../src/services/api';
 import type { AdminUserAccount, AllowlistEntry } from '../../src/types/campus';
@@ -84,7 +85,7 @@ export default function AdminApprovalsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <PortalBrandHeader
           title="Staff Eligibility & Approvals"
           subtitle="Pre-authorise @rvce.edu.in emails and approve, suspend, or revoke staff portal accounts."
@@ -216,7 +217,7 @@ export default function AdminApprovalsScreen() {
             })
           )}
         </View>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

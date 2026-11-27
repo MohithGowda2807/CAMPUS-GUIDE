@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useAuth } from '../../src/context/AuthContext';
 import { campusApi, getApiBaseUrl } from '../../src/services/api';
 import { cognitoClient } from '../../src/services/cognitoAuth';
@@ -89,7 +90,7 @@ export default function AccountSecurityScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <PortalBrandHeader
           title="Account Security"
           subtitle="Manage TOTP Authenticator MFA, password recovery, and active institutional sessions."
@@ -226,7 +227,7 @@ export default function AccountSecurityScreen() {
             <Text style={styles.dangerBtnText}>Sign Out From All Sessions</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

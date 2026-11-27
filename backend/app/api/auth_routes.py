@@ -84,7 +84,10 @@ def get_public_auth_configuration(request: Request) -> dict[str, Any]:
     base_url_str = str(request.base_url).rstrip("/")
     forwarded_proto = (request.headers.get("x-forwarded-proto") or "").lower()
     if (
-        forwarded_proto == "https" or ".trycloudflare.com" in base_url_str
+        forwarded_proto == "https"
+        or ".trycloudflare.com" in base_url_str
+        or ".lhr.life" in base_url_str
+        or ".ngrok" in base_url_str
     ) and base_url_str.startswith("http://"):
         base_url_str = "https://" + base_url_str[len("http://") :]
     base_api = base_url_str + settings.API_V1_PREFIX

@@ -15,6 +15,10 @@
 /Logo.png
 /Faculty-List-for-Website-UploadingApril2026.pdf
 /apk_ui_prompt.txt
+/REPORT_DIAGRAMS_RAW_CONTENT.md
+/RVCE_ER_Diagram_Elmasri_Navathe_Guide.docx
+/report_figures/
+/query
 
 # Local AI agent tooling, knowledge graph, scratch scripts & APK build artifacts
 /.agents/
@@ -69,7 +73,12 @@ uploads/
 backend/uploads/*
 !backend/uploads/.gitkeep
 logs/
+backend/logs/
+backend/.dev_oidc_state.json
 *.log
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
 
 # OS & Editor files
 .DS_Store
@@ -78,3 +87,5 @@ Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+images_data/

@@ -45,6 +45,7 @@ def _execute_visitor_registration(
             detail="Active campus configuration is not initialized.",
         )
 
+    req_approval = bool(payload.requires_host_approval or payload.host_staff_id is not None)
     conn.execute(
         text(
             """
@@ -66,7 +67,7 @@ def _execute_visitor_registration(
             "hid": payload.host_staff_id,
             "purpose": payload.purpose,
             "gate": payload.gate_name,
-            "req_approval": payload.requires_host_approval,
+            "req_approval": req_approval,
             "actor_uid": actor_user_id,
         },
     )
@@ -139,12 +140,23 @@ def list_authorised_visitor_records(
     clauses = ["1=1"]
     params: dict[str, Any] = {"lim": limit}
 
-    # Faculty without Security/Admin role only see visits where they are the designated host
+    # Role & Stakeholder Scoped Visibility Rules:
+    # 1. SYSTEM_ADMIN / FACILITY_ADMIN / SECURITY_RECEPTION see all campus visits (faculty-hosted + general visits).
+    # 2. If a visitor selected a specific host faculty (`host_staff_id IS NOT NULL`), ONLY that specific
+    #    faculty member (plus Admin & Gate Security) sees it.
+    # 3. If a visitor did NOT select a faculty (`host_staff_id IS NULL` — General Visit), DEPT_COORDINATOR / HoD
+    #    also sees general campus visits (`host_staff_id IS NULL`), while ordinary faculty only see visits
+    #    explicitly addressed to their own `staff_id`.
     if not user_roles.intersection({"SECURITY_RECEPTION", "FACILITY_ADMIN", "SYSTEM_ADMIN"}):
-        if not current_user.get("linked_staff_id"):
+        linked_sid = current_user.get("linked_staff_id")
+        if not linked_sid:
             return []
-        clauses.append("host_staff_id = :hsid")
-        params["hsid"] = current_user["linked_staff_id"]
+        if "DEPT_COORDINATOR" in user_roles:
+            clauses.append("(host_staff_id = :hsid OR host_staff_id IS NULL)")
+            params["hsid"] = linked_sid
+        else:
+            clauses.append("host_staff_id = :hsid")
+            params["hsid"] = linked_sid
 
     if visit_status:
         clauses.append("visit_status = :vst")
@@ -190,15 +202,20 @@ def record_visit_checkpoint_action(
 
     user_roles = expand_effective_roles(current_user["roles"])
     if payload.action in ("CHECK_IN", "CHECK_OUT"):
-        if not user_roles.intersection({"SECURITY_RECEPTION", "SYSTEM_ADMIN"}):
+        if not user_roles.intersection({"SECURITY_RECEPTION", "FACILITY_ADMIN", "DEPT_COORDINATOR", "SYSTEM_ADMIN"}):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only Security/Reception personnel may record gate check-in or check-out.",
+                detail="Only Security/Reception, HoD, or Admin personnel may record gate check-in or check-out.",
             )
     elif payload.action in ("APPROVE_HOST", "REJECT_HOST"):
-        is_admin_or_sec = bool(user_roles.intersection({"SECURITY_RECEPTION", "SYSTEM_ADMIN"}))
+        is_admin_or_sec = bool(user_roles.intersection({"SECURITY_RECEPTION", "FACILITY_ADMIN", "SYSTEM_ADMIN"}))
         is_linked_host = visit["host_staff_id"] and visit["host_staff_id"] == current_user.get("linked_staff_id")
-        if not (is_admin_or_sec or is_linked_host):
+        is_dept_coord_general = (
+            visit["host_staff_id"] is None
+            and "DEPT_COORDINATOR" in user_roles
+            and current_user.get("dept_id") is not None
+        )
+        if not (is_admin_or_sec or is_linked_host or is_dept_coord_general):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only the designated host or authorised staff may approve/reject this visit.",

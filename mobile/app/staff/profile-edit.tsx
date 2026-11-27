@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useAuth } from '../../src/context/AuthContext';
 import { useCampusData } from '../../src/context/CampusDataContext';
 import { campusApi } from '../../src/services/api';
@@ -104,7 +105,7 @@ export default function StaffProfileEditScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <PortalBrandHeader
           title="My Faculty Profile"
           subtitle="Review your verified institutional HR roster record and manage permitted public directory details."
@@ -280,7 +281,7 @@ export default function StaffProfileEditScreen() {
             />
           </SafeAreaView>
         </Modal>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../src/theme/colors';
@@ -117,11 +118,7 @@ export default function ServerSettingsModal() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionHeader}>API Server Endpoint</Text>
         <Text style={styles.sectionSub}>
           Configure the FastAPI backend server URL for data synchronization, live faculty statuses,
@@ -287,7 +284,7 @@ export default function ServerSettingsModal() {
             </>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

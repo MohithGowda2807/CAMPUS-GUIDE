@@ -587,8 +587,237 @@ def seed_mysql_and_mongo(
         osm_campus_payload=osm_payload,
         routing_payload=routing_payload,
     )
+    seed_eee_building_floors_and_cabins(conn, mdb, building_map)
     mclient.close()
-    print(f"[MongoDB] Initialized `{mongo_db_name}` with verified RVCE GeoJSON geometries & 479 routing pathway segments (2dsphere indexed).")
+    print(f"[MongoDB] Initialized `{mongo_db_name}` with verified RVCE GeoJSON geometries, EEE 3-floor plans, & 479 routing pathway segments (2dsphere indexed).")
+
+
+def seed_eee_building_floors_and_cabins(
+    conn: pymysql.connections.Connection,
+    mdb: Any,
+    building_map: dict[str, int],
+) -> None:
+    """Seeds authoritative EEE 3-floor architectural rooms, faculty cabin mappings (including door plaques & Kannada faculty), and MongoDB overlays."""
+    from datetime import datetime, timezone
+
+    eee_bid = building_map.get("EEE", 7)
+    ground_rooms = [
+        ("EEE-001", "HoD Room - Electrical & Electronics", "HOD_CABIN", 15, "Head of the Department Cabin, EEE"),
+        ("EEE-002", "Office Room - EEE Department", "ADMIN_OFFICE", 12, "Department Administrative & Examination Office"),
+        ("EEE-003", "Staff Room - EEE 003", "FACULTY_OFFICE", 10, "Faculty Workstations & Office"),
+        ("EEE-004", "Lapp Cable Lab", "LABORATORY", 30, "Lapp Center of Excellence for Cable Technology & Testing"),
+        ("EEE-005", "ADDC / Controls Lab", "LABORATORY", 35, "Analog & Digital Devices / Control Systems Laboratory"),
+        ("EEE-006", "ELIC / PE Lab", "LABORATORY", 35, "Electronic Instrumentation & Power Electronics Laboratory"),
+        ("EEE-007", "Simulation Lab", "LABORATORY", 40, "Power Systems & Electrical Circuit Simulation Lab"),
+        ("EEE-010", "Restrooms (GF)", "RESTROOM", None, "Ground Floor Washrooms"),
+        ("EEE-011", "Machines Lab", "LABORATORY", 50, "DC & AC Electrical Machines Laboratory"),
+        ("EEE-011A", "E-Mobility Lab", "LABORATORY", 35, "Electric Vehicle, Battery & Powertrain Research Lab"),
+        ("EEE-011B", "HV Lab (High Voltage)", "LABORATORY", 30, "High Voltage & Dielectric Testing Laboratory"),
+    ]
+    first_floor_rooms = [
+        ("EEE-101", "Counselling Room & Staff Cabin - EEE 101", "FACULTY_OFFICE", 8, "Faculty & Counselling Cabin: Dr. Suresha C, Dr. Parth Sarathi Panigrahy"),
+        ("EEE-102", "M.Tech Lab", "LABORATORY", 30, "Power Electronics & Energy Systems M.Tech Research Lab"),
+        ("EEE-103", "Class Room - EEE 103", "CLASSROOM", 70, "UG Smart Lecture Hall"),
+        ("EEE-104", "Staff Room - EEE 104", "FACULTY_OFFICE", 12, "Faculty Cabin: Dr. Adinath Jain, Dr. Madhu B R, Dr. Sushmita Sarkar, Dr. Raja Vidya, Dr. Abhilash Krishna, Ms. Lakshmi R K, Ms. Vanishree, Ms. Lalithamma"),
+        ("EEE-105", "Department Library", "LIBRARY_ZONE", 40, "EEE & EIE Department Reference Library"),
+        ("EEE-107", "Class Room - EEE 107", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-117", "Class Room - EEE 117", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-116", "Class Room - EEE 116", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-115", "Staff Room - EEE 115", "FACULTY_OFFICE", 10, "Faculty Cabin: Dr. Nagaraju P, Dr. Rachana S Akki, Dr. Sunanda C, Dr. Ajay K M, Dr. Pandry Narendra Rao"),
+        ("EEE-114", "Class Room - EEE 114", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-113", "Class Room - EEE 113", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-112", "Class Room - EEE 112", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-108", "Toilets - EEE 108 to 111", "RESTROOM", None, "First Floor Restrooms & Washrooms"),
+    ]
+    second_floor_rooms = [
+        ("EEE-201", "Staff Room - EEE 201", "FACULTY_OFFICE", 15, "Faculty Cabin: Shwetha Baliga, Dr. Anusha L S, Sujata Priyambada Mishra, Deepika P, Neeta B Malvi, Dr. Keshav M, Abhay Deshpande, Ravishankar Holla, Dr. Jagannatha Guptha V L, Dr. Rohini S Hallikar"),
+        ("EEE-202A", "R & D Lab - EEE 202(A)", "LABORATORY", 30, "Research & Development Center"),
+        ("EEE-202B", "Class Room - EEE 202(B)", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-203", "Class Room - EEE 203", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-204", "Class Room - EEE 204", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-205", "Staff Room - EEE 205", "FACULTY_OFFICE", 10, "Faculty Cabin: Dr. Ramesh K B, Dr. Anand Jatti, Dr. Shylashree N, Dr. S. Ravishankar, Dr. Mahesh A"),
+        ("EEE-207", "ABB / Micro Grid Lab", "LABORATORY", 40, "ABB Smart Microgrid & Industrial Automation Laboratory"),
+        ("EEE-215", "Class Room - EEE 215", "CLASSROOM", 70, "UG Lecture Hall"),
+        ("EEE-214", "SSP / MC Lab - EEE 214", "LABORATORY", 40, "Signal Processing & Microcontroller Laboratory"),
+        ("EEE-ECH", "ECE Seminar Hall", "SEMINAR_HALL", 150, "Air-Conditioned Audiovisual Seminar Hall & Auditorium"),
+        ("EEE-208", "Toilets - EEE 208 to 210", "RESTROOM", None, "Second Floor Washrooms"),
+    ]
+
+    room_id_by_num: dict[str, int] = {}
+    floor_id_by_num: dict[int, int] = {}
+    plan_id_by_floor: dict[int, int] = {}
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT floor_id, floor_number FROM floors WHERE building_id = %s", (eee_bid,))
+        for r in cur.fetchall():
+            floor_id_by_num[int(r["floor_number"])] = int(r["floor_id"])
+
+        cur.execute("SELECT dept_id FROM departments WHERE dept_code = 'EEE' LIMIT 1")
+        eee_dept_row = cur.fetchone()
+        eee_dept_id = int(eee_dept_row["dept_id"]) if eee_dept_row else 7
+
+        for fnum, room_defs in [(0, ground_rooms), (1, first_floor_rooms), (2, second_floor_rooms)]:
+            fid = floor_id_by_num.get(fnum)
+            if not fid:
+                continue
+            for rnum, rname, rtype, cap, desc in room_defs:
+                cur.execute("SELECT room_id FROM rooms WHERE floor_id = %s AND room_number = %s", (fid, rnum))
+                existing = cur.fetchone()
+                if existing:
+                    rid = int(existing["room_id"])
+                    cur.execute(
+                        "UPDATE rooms SET room_name=%s, room_type=%s, capacity=%s, description=%s WHERE room_id=%s",
+                        (rname, rtype, cap, desc, rid),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO rooms (floor_id, dept_id, room_number, room_name, room_type, capacity, description, is_accessible, public_visibility, verification_status, status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, TRUE, 'VERIFIED', 'ACTIVE')
+                        """,
+                        (fid, eee_dept_id, rnum, rname, rtype, cap, desc),
+                    )
+                    rid = int(cur.lastrowid)
+                room_id_by_num[rnum] = rid
+
+        # Map faculty by staff_id to their verified EEE cabins
+        cabin_staff_ids: dict[str, list[int]] = {
+            "EEE-001": [181],
+            "EEE-101": [172, 177],
+            "EEE-104": [169, 174, 175, 176, 182, 222, 223, 224],
+            "EEE-115": [193, 170, 171, 173, 178],
+            "EEE-201": [152, 154, 149, 151, 150, 257, 130, 147, 273, 137],
+            "EEE-205": [128, 187, 162, 159, 131],
+        }
+        for rnum, sids in cabin_staff_ids.items():
+            rid = room_id_by_num.get(rnum)
+            if not rid:
+                continue
+            for sid in sids:
+                cur.execute("UPDATE staff SET office_room_id = %s WHERE staff_id = %s", (rid, sid))
+
+        cur.execute(
+            "UPDATE staff SET program_name = 'Kannada ( Humanities & Basic Sciences )' WHERE staff_id IN (222, 223, 224)"
+        )
+
+        # Create/approve floor_plans for GF, 1F, 2F
+        for fnum, ver, src in [
+            (0, "v2.0-GF-Architectural", "Official EEE Department Ground Floor Layout Plan"),
+            (1, "v2.0-1F-Architectural", "Official EEE Department First Floor Layout Plan"),
+            (2, "v2.0-2F-Architectural", "Official EEE Department Second Floor Layout Plan"),
+        ]:
+            fid = floor_id_by_num.get(fnum)
+            if not fid:
+                continue
+            cur.execute("SELECT floor_plan_id FROM floor_plans WHERE floor_id = %s LIMIT 1", (fid,))
+            fp_row = cur.fetchone()
+            if fp_row:
+                fpid = int(fp_row["floor_plan_id"])
+                cur.execute(
+                    "UPDATE floor_plans SET approval_status='APPROVED', is_active_public=TRUE, is_schematic_sample=FALSE, version_label=%s WHERE floor_plan_id=%s",
+                    (ver, fpid),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO floor_plans (floor_id, version_label, file_format, canvas_width, canvas_height, coordinate_space, source_reference, approval_status, is_active_public, is_schematic_sample, approved_at)
+                    VALUES (%s, %s, 'VECTOR_OVERLAY', 1000, 680, 'NORMALIZED_1000', %s, 'APPROVED', TRUE, FALSE, NOW())
+                    """,
+                    (fid, ver, src),
+                )
+                fpid = int(cur.lastrowid)
+            plan_id_by_floor[fid] = fpid
+
+    conn.commit()
+
+    gf_bounds = {
+        "EEE-006": {"x": 60, "y": 70, "w": 300, "h": 75},
+        "EEE-005": {"x": 60, "y": 155, "w": 300, "h": 75},
+        "EEE-004": {"x": 60, "y": 240, "w": 300, "h": 75},
+        "EEE-003": {"x": 60, "y": 325, "w": 300, "h": 75},
+        "EEE-002": {"x": 60, "y": 410, "w": 300, "h": 75},
+        "EEE-001": {"x": 60, "y": 495, "w": 300, "h": 85},
+        "EEE-007": {"x": 380, "y": 70, "w": 240, "h": 110},
+        "EEE-010": {"x": 640, "y": 70, "w": 300, "h": 65},
+        "EEE-011": {"x": 640, "y": 150, "w": 300, "h": 150},
+        "EEE-011A": {"x": 640, "y": 315, "w": 300, "h": 120},
+        "EEE-011B": {"x": 640, "y": 450, "w": 300, "h": 130},
+    }
+    f1_bounds = {
+        "EEE-105": {"x": 60, "y": 70, "w": 300, "h": 95},
+        "EEE-104": {"x": 60, "y": 175, "w": 300, "h": 95},
+        "EEE-103": {"x": 60, "y": 280, "w": 300, "h": 95},
+        "EEE-102": {"x": 60, "y": 385, "w": 300, "h": 95},
+        "EEE-101": {"x": 60, "y": 490, "w": 300, "h": 90},
+        "EEE-107": {"x": 380, "y": 70, "w": 240, "h": 105},
+        "EEE-117": {"x": 380, "y": 495, "w": 240, "h": 85},
+        "EEE-108": {"x": 640, "y": 70, "w": 300, "h": 65},
+        "EEE-112": {"x": 640, "y": 145, "w": 300, "h": 75},
+        "EEE-113": {"x": 640, "y": 230, "w": 300, "h": 75},
+        "EEE-114": {"x": 640, "y": 315, "w": 300, "h": 75},
+        "EEE-115": {"x": 640, "y": 400, "w": 300, "h": 90},
+        "EEE-116": {"x": 640, "y": 500, "w": 300, "h": 80},
+    }
+    f2_bounds = {
+        "EEE-205": {"x": 60, "y": 70, "w": 300, "h": 80},
+        "EEE-204": {"x": 60, "y": 160, "w": 300, "h": 80},
+        "EEE-203": {"x": 60, "y": 250, "w": 300, "h": 80},
+        "EEE-202B": {"x": 60, "y": 340, "w": 300, "h": 80},
+        "EEE-202A": {"x": 60, "y": 430, "w": 300, "h": 80},
+        "EEE-201": {"x": 60, "y": 520, "w": 300, "h": 80},
+        "EEE-207": {"x": 380, "y": 70, "w": 240, "h": 105},
+        "EEE-215": {"x": 380, "y": 495, "w": 240, "h": 85},
+        "EEE-208": {"x": 640, "y": 70, "w": 300, "h": 65},
+        "EEE-ECH": {"x": 640, "y": 150, "w": 300, "h": 230},
+        "EEE-214": {"x": 640, "y": 395, "w": 300, "h": 185},
+    }
+
+    for fnum, room_defs, bounds_map, clabel in [
+        (0, ground_rooms, gf_bounds, "Ground Floor Central Corridor & Quadrangle"),
+        (1, first_floor_rooms, f1_bounds, "First Floor Central Corridor & Open Atrium"),
+        (2, second_floor_rooms, f2_bounds, "Second Floor Central Corridor & Open Atrium"),
+    ]:
+        fid = floor_id_by_num.get(fnum)
+        if not fid or fid not in plan_id_by_floor:
+            continue
+        fpid = plan_id_by_floor[fid]
+        ov_rooms = []
+        for rnum, rname, rtype, _, _ in room_defs:
+            rid = room_id_by_num.get(rnum)
+            b = bounds_map.get(rnum)
+            if rid and b:
+                ov_rooms.append({
+                    "room_id": rid,
+                    "room_number": rnum,
+                    "label": rname,
+                    "category": rtype,
+                    "bounds": b,
+                })
+        doc = {
+            "floor_plan_id": fpid,
+            "floor_id": fid,
+            "building_id": eee_bid,
+            "coordinate_space": "NORMALIZED_1000",
+            "is_schematic_sample": False,
+            "canvas": {"width": 1000, "height": 680},
+            "corridors": [
+                {"x": 360, "y": 60, "w": 20, "h": 540, "label": "West Wing Corridor"},
+                {"x": 620, "y": 60, "w": 20, "h": 540, "label": "East Wing Corridor"},
+                {"x": 360, "y": 180, "w": 280, "h": 20, "label": "Cross Corridor North"},
+                {"x": 360, "y": 470, "w": 280, "h": 20, "label": "Cross Corridor South"},
+                {"x": 380, "y": 200, "w": 240, "h": 270, "label": clabel},
+            ],
+            "landmarks": [
+                {"type": "STAIRS", "x": 370, "y": 50, "label": "North Staircase"},
+                {"type": "STAIRS", "x": 370, "y": 610, "label": "South Staircase"},
+                {"type": "LIFT", "x": 630, "y": 50, "label": "Elevator"},
+                {"type": "ENTRANCE", "x": 500, "y": 630, "label": "Main Floor Access"},
+            ],
+            "rooms": ov_rooms,
+            "route_network": {"is_verified": True, "nodes": [], "edges": []},
+            "updated_at": datetime.now(timezone.utc),
+        }
+        mdb.floor_plan_overlays.replace_one({"floor_plan_id": fpid}, doc, upsert=True)
 
 
 def main() -> None:

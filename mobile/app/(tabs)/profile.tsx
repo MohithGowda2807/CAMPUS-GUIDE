@@ -13,8 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../src/context/AuthContext';
 import { useCampusData } from '../../src/context/CampusDataContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { StatusPill } from '../../src/components/StatusPill';
 import { campusApi, getApiBaseUrl } from '../../src/services/api';
 import { Colors } from '../../src/theme/colors';
@@ -38,6 +40,8 @@ export default function StaffPortalDashboardScreen() {
     logout,
   } = useAuth();
   const { connectionState, faculty, refreshData } = useCampusData();
+  const { mode: appearanceMode, isGlass, theme, setAppearanceMode } = useTheme();
+  const [aboutExpanded, setAboutExpanded] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
   const [visits, setVisits] = useState<VisitRecord[]>([]);
@@ -65,11 +69,19 @@ export default function StaffPortalDashboardScreen() {
     'ADMIN',
     'SYSTEM_ADMIN'
   );
-  const canCheckInGate = hasAnyRole('STAFF', 'SECURITY_RECEPTION', 'ADMIN', 'SYSTEM_ADMIN');
+  const canCheckInGate = hasAnyRole(
+    'STAFF',
+    'SECURITY_RECEPTION',
+    'FACILITY_ADMIN',
+    'DEPT_COORDINATOR',
+    'ADMIN',
+    'SYSTEM_ADMIN'
+  );
   const canViewReports = hasAnyRole(
     'STAFF',
     'SECURITY_RECEPTION',
     'FACILITY_ADMIN',
+    'DEPT_COORDINATOR',
     'ADMIN',
     'SYSTEM_ADMIN'
   );
@@ -85,7 +97,7 @@ export default function StaffPortalDashboardScreen() {
       setLoadingVisits(true);
       try {
         const vList = await campusApi.listVisits();
-        setVisits(vList.slice(0, 8));
+        setVisits(vList.slice(0, 20));
       } catch {
         setVisits([]);
       } finally {
@@ -103,6 +115,28 @@ export default function StaffPortalDashboardScreen() {
   useEffect(() => {
     loadOperationalData();
   }, [loadOperationalData]);
+
+  // Live auto-refresh every 10s while signed in so new visitor passes appear automatically
+  useEffect(() => {
+    if (!user || authStage !== 'AUTHENTICATED' || !canManageVisits) return;
+    const timer = setInterval(() => {
+      campusApi
+        .listVisits()
+        .then((vList) => setVisits(vList.slice(0, 20)))
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [user, authStage, canManageVisits]);
+
+  const pendingHostApprovals = useMemo(
+    () =>
+      visits.filter(
+        (v) =>
+          v.approval_status === 'PENDING' &&
+          (v.host_staff_id === user?.linked_staff_id || isAdmin)
+      ),
+    [visits, user?.linked_staff_id, isAdmin]
+  );
 
   const handlePullRefresh = async () => {
     setRefreshing(true);
@@ -164,7 +198,10 @@ export default function StaffPortalDashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.canvas }]}
+      edges={['top']}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -509,6 +546,78 @@ export default function StaffPortalDashboardScreen() {
               ) : null}
             </View>
 
+            {/* LIVE VISITOR HOST NOTIFICATION BANNER */}
+            {pendingHostApprovals.length > 0 && (
+              <View
+                style={{
+                  backgroundColor: '#FFFBEB',
+                  borderColor: '#F59E0B',
+                  borderWidth: 1.5,
+                  borderRadius: 16,
+                  padding: 14,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <Ionicons name="notifications" size={20} color="#D97706" />
+                  <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#92400E', flex: 1 }}>
+                    {pendingHostApprovals.length} New Visitor Pass{pendingHostApprovals.length > 1 ? 'es' : ''} Awaiting Your Approval
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#B45309', lineHeight: 17, marginBottom: 10 }}>
+                  A campus visitor selected you ({user.staff_name || user.email}) as their faculty host. Approve or reject below to notify Main Gate Security.
+                </Text>
+                <View style={{ gap: 8 }}>
+                  {pendingHostApprovals.map((pv) => (
+                    <View
+                      key={`notif-${pv.visit_id}`}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        padding: 11,
+                        borderWidth: 1,
+                        borderColor: '#FDE68A',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: Colors.textPrimary }}>
+                          {pv.visitor_name} ({pv.visit_pass_code})
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: Colors.textSecondary, marginTop: 1 }}>
+                          Purpose: {pv.purpose}
+                          {pv.host_name ? ` • Host: ${pv.host_name}` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          style={[styles.gateActionBtnIn, { backgroundColor: '#15803D' }]}
+                          onPress={() => handleVisitAction(pv.visit_id, 'APPROVE_HOST')}
+                          disabled={actingVisitId === pv.visit_id}
+                        >
+                          <Text style={styles.gateActionText}>Approve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.gateActionBtnOut,
+                            { borderColor: Colors.danger, backgroundColor: '#FEF2F2' },
+                          ]}
+                          onPress={() => handleVisitAction(pv.visit_id, 'REJECT_HOST')}
+                          disabled={actingVisitId === pv.visit_id}
+                        >
+                          <Text style={[styles.gateActionTextOut, { color: Colors.danger }]}>
+                            Reject
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {/* ADMIN GOVERNANCE CONSOLE (ONLY FOR ADMIN / SYSTEM_ADMIN) */}
             {isAdmin && (
               <TouchableOpacity
@@ -687,22 +796,88 @@ export default function StaffPortalDashboardScreen() {
                               </Text>
                             </View>
                           </View>
-                          <Text style={styles.visitName}>{v.visitor_name}</Text>
-                          <Text style={styles.visitMeta} numberOfLines={1}>
-                            {v.destination_building_name || 'Campus'} • {v.purpose}
-                          </Text>
-                        </View>
+                           <Text style={styles.visitName}>{v.visitor_name}</Text>
+                           <Text style={styles.visitMeta} numberOfLines={1}>
+                             {v.destination_building_name || 'Campus'} • {v.purpose}
+                           </Text>
+                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                             <View
+                               style={{
+                                 backgroundColor: v.host_staff_id ? '#EEF2FF' : '#F1F5F9',
+                                 paddingHorizontal: 7,
+                                 paddingVertical: 2,
+                                 borderRadius: 5,
+                               }}
+                             >
+                               <Text
+                                 style={{
+                                   fontSize: 10,
+                                   fontWeight: '700',
+                                   color: v.host_staff_id ? Colors.primary : Colors.textSecondary,
+                                 }}
+                               >
+                                 {v.host_name
+                                   ? `Host: ${v.host_name} (#${v.host_staff_id})`
+                                   : 'General Campus Visit'}
+                               </Text>
+                             </View>
+                             {v.approval_status && v.approval_status !== 'NOT_REQUIRED' && (
+                               <View
+                                 style={{
+                                   backgroundColor:
+                                     v.approval_status === 'APPROVED'
+                                       ? Colors.successBg
+                                       : v.approval_status === 'REJECTED'
+                                       ? Colors.dangerBg
+                                       : Colors.warningBg,
+                                   paddingHorizontal: 7,
+                                   paddingVertical: 2,
+                                   borderRadius: 5,
+                                 }}
+                               >
+                                 <Text
+                                   style={{
+                                     fontSize: 10,
+                                     fontWeight: '800',
+                                     color:
+                                       v.approval_status === 'APPROVED'
+                                         ? Colors.success
+                                         : v.approval_status === 'REJECTED'
+                                         ? Colors.danger
+                                         : Colors.warning,
+                                   }}
+                                 >
+                                   Host: {v.approval_status}
+                                 </Text>
+                               </View>
+                             )}
+                           </View>
+                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                          {v.approval_status === 'PENDING' && (
-                            <TouchableOpacity
-                              style={styles.gateActionBtnIn}
-                              onPress={() => handleVisitAction(v.visit_id, 'APPROVE_HOST')}
-                              disabled={actingVisitId === v.visit_id}
-                            >
-                              <Text style={styles.gateActionText}>Approve</Text>
-                            </TouchableOpacity>
-                          )}
+                         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                           {v.approval_status === 'PENDING' && (
+                             <>
+                               <TouchableOpacity
+                                 style={[styles.gateActionBtnIn, { backgroundColor: '#15803D' }]}
+                                 onPress={() => handleVisitAction(v.visit_id, 'APPROVE_HOST')}
+                                 disabled={actingVisitId === v.visit_id}
+                               >
+                                 <Text style={styles.gateActionText}>Approve</Text>
+                               </TouchableOpacity>
+                               <TouchableOpacity
+                                 style={[
+                                   styles.gateActionBtnOut,
+                                   { borderColor: Colors.danger, backgroundColor: '#FEF2F2' },
+                                 ]}
+                                 onPress={() => handleVisitAction(v.visit_id, 'REJECT_HOST')}
+                                 disabled={actingVisitId === v.visit_id}
+                               >
+                                 <Text style={[styles.gateActionTextOut, { color: Colors.danger }]}>
+                                   Reject
+                                 </Text>
+                               </TouchableOpacity>
+                             </>
+                           )}
                           {canCheckInGate &&
                             v.visit_status === 'REGISTERED' &&
                             v.approval_status !== 'REJECTED' && (
@@ -764,6 +939,274 @@ export default function StaffPortalDashboardScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* =====================================================================
+            SETTINGS → APPEARANCE → INTERFACE STYLE (GLOBAL PERSISTED MODE)
+           ===================================================================== */}
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderSubtle,
+              marginTop: 14,
+            },
+            theme.shadows.card,
+          ]}
+        >
+          <View style={styles.sectionHeaderBetween}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="color-palette-outline" size={20} color={theme.colors.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+                Appearance • Interface Style
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: theme.colors.primarySoft,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 99,
+              }}
+            >
+              <Text style={{ fontSize: 10.5, fontWeight: '700', color: theme.colors.primary }}>
+                {isGlass ? 'Glass Experience' : 'Clean & Modern'}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.sectionDesc, { color: theme.colors.textSecondary }]}>
+            Choose your preferred visual interface mode. Your selection applies immediately across all screens and persists automatically.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setAppearanceMode('CLEAN_MODERN');
+              }}
+              style={{
+                flex: 1,
+                borderRadius: 14,
+                padding: 13,
+                borderWidth: appearanceMode === 'CLEAN_MODERN' ? 2 : 1,
+                borderColor:
+                  appearanceMode === 'CLEAN_MODERN'
+                    ? theme.colors.primary
+                    : theme.colors.borderSubtle,
+                backgroundColor:
+                  appearanceMode === 'CLEAN_MODERN'
+                    ? theme.colors.primarySoft
+                    : theme.colors.surfaceMuted,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 6,
+                }}
+              >
+                <Ionicons
+                  name="sunny-outline"
+                  size={18}
+                  color={theme.colors.primary}
+                />
+                <Ionicons
+                  name={
+                    appearanceMode === 'CLEAN_MODERN'
+                      ? 'radio-button-on'
+                      : 'radio-button-off'
+                  }
+                  size={18}
+                  color={
+                    appearanceMode === 'CLEAN_MODERN'
+                      ? theme.colors.primary
+                      : theme.colors.textMuted
+                  }
+                />
+              </View>
+              <Text
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: '700',
+                  color: theme.colors.textPrimary,
+                }}
+              >
+                Clean & Modern
+              </Text>
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  color: theme.colors.textSecondary,
+                  marginTop: 2,
+                  lineHeight: 16,
+                }}
+              >
+                Bright, spacious surfaces with crisp elevation
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setAppearanceMode('GLASS_EXPERIENCE');
+              }}
+              style={{
+                flex: 1,
+                borderRadius: 14,
+                padding: 13,
+                borderWidth: appearanceMode === 'GLASS_EXPERIENCE' ? 2 : 1,
+                borderColor:
+                  appearanceMode === 'GLASS_EXPERIENCE'
+                    ? theme.colors.primary
+                    : theme.colors.borderSubtle,
+                backgroundColor:
+                  appearanceMode === 'GLASS_EXPERIENCE'
+                    ? theme.colors.primarySoft
+                    : theme.colors.surfaceMuted,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 6,
+                }}
+              >
+                <Ionicons name="sparkles-outline" size={18} color={theme.colors.primary} />
+                <Ionicons
+                  name={
+                    appearanceMode === 'GLASS_EXPERIENCE'
+                      ? 'radio-button-on'
+                      : 'radio-button-off'
+                  }
+                  size={18}
+                  color={
+                    appearanceMode === 'GLASS_EXPERIENCE'
+                      ? theme.colors.primary
+                      : theme.colors.textMuted
+                  }
+                />
+              </View>
+              <Text
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: '700',
+                  color: theme.colors.textPrimary,
+                }}
+              >
+                Glass Experience
+              </Text>
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  color: theme.colors.textSecondary,
+                  marginTop: 2,
+                  lineHeight: 16,
+                }}
+              >
+                Translucent frosted floating bars & sheets
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* =====================================================================
+            PROGRESSIVE DISCLOSURE: ABOUT & SYSTEM ARCHITECTURE
+           ===================================================================== */}
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderSubtle,
+              marginTop: 12,
+            },
+            theme.shadows.card,
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setAboutExpanded((prev) => !prev)}
+            style={styles.sectionHeaderBetween}
+          >
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+              <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+                About & System Architecture
+              </Text>
+            </View>
+            <Ionicons
+              name={aboutExpanded ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={theme.colors.textMuted}
+            />
+          </TouchableOpacity>
+
+          {aboutExpanded && (
+            <View style={{ marginTop: 10, gap: 10 }}>
+              {[
+                {
+                  title: 'AI / NLP Campus Assistant',
+                  desc: 'Hybrid retrieval engine combining lexical search, semantic vector matching, and campus pathfinding to answer natural-language questions.',
+                },
+                {
+                  title: 'Hybrid SQL + Document Store',
+                  desc: 'Relational records manage faculty, departments, rooms, and visitor passes alongside vector indoor floor overlays.',
+                },
+                {
+                  title: 'Normalized Data Integrity',
+                  desc: 'Structured entity relationships ensure verified cabin assignments, multi-floor room hierarchies, and live status consistency.',
+                },
+                {
+                  title: 'Automated Campus Workflows',
+                  desc: 'Automated availability expiration, digital visitor gate pass generation, and audit logging.',
+                },
+                {
+                  title: 'Security & Role Governance',
+                  desc: 'OpenID Connect (PKCE), TOTP Multi-Factor Authentication, and Role-Based Access Control.',
+                },
+              ].map((item) => (
+                <View
+                  key={item.title}
+                  style={{
+                    backgroundColor: theme.colors.surfaceMuted,
+                    padding: 11,
+                    borderRadius: 11,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '700',
+                      color: theme.colors.textPrimary,
+                    }}
+                  >
+                    {item.title}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.colors.textSecondary,
+                      marginTop: 2,
+                      lineHeight: 17,
+                    }}
+                  >
+                    {item.desc}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>R. V. College of Engineering • Bengaluru 560059</Text>

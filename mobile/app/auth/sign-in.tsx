@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { PortalBrandHeader } from '../../src/components/PortalBrandHeader';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useAuth, type AuthStage } from '../../src/context/AuthContext';
 import { validateRvceInstitutionalEmail } from '../../src/services/cognitoAuth';
 import { Colors } from '../../src/theme/colors';
@@ -102,15 +103,7 @@ export default function StaffSignInScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
           <PortalBrandHeader
             title="Faculty & Staff Sign In"
             subtitle="Sign in with your verified @rvce.edu.in account to manage availability, profile details, and authorised campus operations."
@@ -279,8 +272,7 @@ export default function StaffSignInScreen() {
               • Server Settings
             </Text>
           </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardSafeScrollView>
     </SafeAreaView>
   );
 }

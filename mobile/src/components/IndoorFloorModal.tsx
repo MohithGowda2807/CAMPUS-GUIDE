@@ -10,10 +10,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
+import { KeyboardSafeScrollView } from './KeyboardSafeScrollView';
 import Svg, { Rect, G, Circle, Text as SvgText } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { campusApi } from '../services/api';
-import { Colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import { Radius, Spacing } from '../theme/spacing';
 import type {
   Building,
@@ -37,8 +40,8 @@ const ROOM_CATEGORY_FILL: Record<string, string> = {
   CLASSROOM: '#F8FAFC',
   LABORATORY: '#EFF6FF',
   SEMINAR_HALL: '#F0F9FF',
-  FACULTY_OFFICE: '#FFF7ED', // Warm amber highlight for faculty cabins
-  HOD_CABIN: '#FEF3C7',      // Golden amber for HoD cabin
+  FACULTY_OFFICE: '#FFF7ED',
+  HOD_CABIN: '#FEF3C7',
   ADMIN_OFFICE: '#F8FAFC',
   LIBRARY_ZONE: '#F0FDF4',
   RESTROOM: '#F1F5F9',
@@ -53,6 +56,7 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
   onClose,
   onNavigateToBuilding,
 }) => {
+  const { isGlass, theme } = useTheme();
   const [detail, setDetail] = useState<BuildingDetailResponse | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<FloorSummary | null>(null);
   const [floorPlan, setFloorPlan] = useState<FloorPlanResponse | null>(null);
@@ -95,7 +99,7 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
     return () => {
       active = false;
     };
-  }, [visible, building]);
+  }, [visible, building, initialFloorId]);
 
   useEffect(() => {
     if (!visible || !selectedFloor) return;
@@ -130,6 +134,7 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
   }, [visible, selectedFloor]);
 
   const handleSelectRoom = (room: RoomItem) => {
+    Haptics.selectionAsync().catch(() => {});
     setSelectedRoom(room);
     setRoomOccupants([]);
     campusApi
@@ -154,7 +159,8 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
       (r) =>
         r.room_number.toLowerCase().includes(q) ||
         r.room_name.toLowerCase().includes(q) ||
-        r.room_type.toLowerCase().includes(q)
+        r.room_type.toLowerCase().includes(q) ||
+        (r.description && r.description.toLowerCase().includes(q))
     );
   }, [floorPlan, roomFilter]);
 
@@ -164,158 +170,275 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
     floorPlan?.overlay?.canvas.width ?? floorPlan?.floor_plan?.canvas_width ?? 1000;
   const canvasH =
     floorPlan?.overlay?.canvas.height ?? floorPlan?.floor_plan?.canvas_height ?? 650;
-  const isSchematic = Boolean(
-    floorPlan?.floor_plan?.is_schematic_sample || floorPlan?.overlay?.is_schematic_sample
-  );
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* Top Bar with Breadcrumb Context */}
-        <View style={styles.topBar}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.canvas }]}
+        edges={['top', 'bottom']}
+      >
+        {/* Top Bar with Building Context */}
+        <View
+          style={[
+            styles.topBar,
+            {
+              backgroundColor: isGlass ? theme.colors.surfaceFloating : theme.colors.surface,
+              borderBottomColor: theme.colors.borderSubtle,
+            },
+          ]}
+        >
+          {isGlass && <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />}
           <TouchableOpacity
-            style={styles.backBtn}
+            style={[styles.backBtn, { backgroundColor: theme.colors.surfaceMuted }]}
             onPress={onClose}
             accessibilityLabel="Back to outdoor campus map"
           >
-            <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
+
           <View style={styles.topTitleCol}>
-            <Text style={styles.breadcrumb}>
-              RVCE Campus • {building.building_code}
+            <Text style={[styles.breadcrumb, { color: theme.colors.textMuted }]}>
+              {building.building_code} • {building.total_floors} Floors
             </Text>
-            <Text style={styles.buildingTitle} numberOfLines={1}>
+            <Text
+              style={[styles.buildingTitle, { color: theme.colors.textPrimary }]}
+              numberOfLines={1}
+            >
               {building.building_name}
             </Text>
           </View>
+
           {onNavigateToBuilding && (
             <TouchableOpacity
-              style={styles.routeChip}
+              style={[styles.routeChip, { backgroundColor: theme.colors.primary }]}
               onPress={() => {
                 onClose();
                 onNavigateToBuilding(building);
               }}
             >
-              <Ionicons name="navigate" size={14} color="#FFFFFF" />
-              <Text style={styles.routeChipText}>Route</Text>
+              <Ionicons name="navigate" size={13} color="#FFFFFF" />
+              <Text style={styles.routeChipText}>Directions</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Building Summary Card */}
-          <View style={styles.summaryCard}>
+        <KeyboardSafeScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Compact Building Header Summary */}
+          <View
+            style={[
+              styles.summaryCard,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.borderSubtle,
+              },
+              theme.shadows.card,
+            ]}
+          >
             <View style={styles.metaBadgesRow}>
-              <View style={styles.codeBadge}>
-                <Text style={styles.codeBadgeText}>{building.building_code}</Text>
+              <View style={[styles.codeBadge, { backgroundColor: theme.colors.primarySoft }]}>
+                <Text style={[styles.codeBadgeText, { color: theme.colors.primary }]}>
+                  {building.building_code}
+                </Text>
               </View>
-              <View style={styles.metaBadge}>
-                <Ionicons name="layers-outline" size={12} color={Colors.textSecondary} />
-                <Text style={styles.metaBadgeText}>{building.total_floors} Floors</Text>
+              <View style={[styles.metaBadge, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name="layers-outline" size={12} color={theme.colors.textSecondary} />
+                <Text style={[styles.metaBadgeText, { color: theme.colors.textSecondary }]}>
+                  {building.total_floors} Floors
+                </Text>
               </View>
               {building.is_accessible && (
-                <View style={styles.accessBadge}>
-                  <Ionicons name="accessibility-outline" size={12} color={Colors.success} />
-                  <Text style={styles.accessBadgeText}>Accessible</Text>
+                <View style={[styles.accessBadge, { backgroundColor: theme.colors.successBg }]}>
+                  <Ionicons name="accessibility-outline" size={12} color={theme.colors.success} />
+                  <Text style={[styles.accessBadgeText, { color: theme.colors.success }]}>
+                    Step-Free Access
+                  </Text>
                 </View>
               )}
             </View>
             {building.description ? (
-              <Text style={styles.buildingDesc}>{building.description}</Text>
+              <Text style={[styles.buildingDesc, { color: theme.colors.textSecondary }]}>
+                {building.description}
+              </Text>
             ) : null}
           </View>
 
           {loadingBuilding ? (
             <View style={styles.loaderBox}>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.loaderText}>Loading building floors & spaces…</Text>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loaderText, { color: theme.colors.textMuted }]}>
+                Loading building floors & rooms…
+              </Text>
             </View>
           ) : (
             <>
-              {/* Floor Selector Chips */}
+              {/* Clean Horizontal Segmented Floor Selector (Zero Truncation, No "Mall View" text) */}
               {detail && detail.floors.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>Select Floor</Text>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={[styles.sectionLabel, { color: theme.colors.textPrimary }]}>
+                      Floor Level
+                    </Text>
+                    <Text style={[styles.sectionCountText, { color: theme.colors.textMuted }]}>
+                      {detail.floors.length} {detail.floors.length === 1 ? 'Floor' : 'Floors'}
+                    </Text>
+                  </View>
+
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.floorChipsRow}
+                    contentContainerStyle={styles.floorSelectorRow}
                   >
-                    {detail.floors.map((fl) => {
-                      const active = selectedFloor?.floor_id === fl.floor_id;
-                      return (
-                        <TouchableOpacity
-                          key={fl.floor_id}
-                          style={[styles.floorChip, active && styles.floorChipActive]}
-                          onPress={() => setSelectedFloor(fl)}
-                        >
-                          <Text
+                    {[...detail.floors]
+                      .sort((a, b) => a.floor_number - b.floor_number)
+                      .map((fl) => {
+                        const active = selectedFloor?.floor_id === fl.floor_id;
+                        const levelBadge =
+                          fl.floor_number === 0
+                            ? 'GF'
+                            : fl.floor_number < 0
+                            ? `B${Math.abs(fl.floor_number)}`
+                            : `${fl.floor_number}F`;
+                        return (
+                          <TouchableOpacity
+                            key={fl.floor_id}
+                            activeOpacity={0.85}
                             style={[
-                              styles.floorChipText,
-                              active && styles.floorChipTextActive,
+                              styles.floorTabPill,
+                              {
+                                backgroundColor: active
+                                  ? theme.colors.primary
+                                  : theme.colors.surface,
+                                borderColor: active
+                                  ? theme.colors.primary
+                                  : theme.colors.borderSubtle,
+                              },
+                              !active && theme.shadows.card,
                             ]}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              setSelectedFloor(fl);
+                            }}
                           >
-                            {fl.floor_name}
-                          </Text>
-                          {fl.has_lift_access && (
-                            <Ionicons
-                              name="swap-vertical"
-                              size={12}
-                              color={active ? '#FFFFFF' : Colors.textMuted}
-                            />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
+                            <View
+                              style={[
+                                styles.floorCodeBox,
+                                {
+                                  backgroundColor: active
+                                    ? 'rgba(255, 255, 255, 0.22)'
+                                    : theme.colors.primarySoft,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.floorCodeText,
+                                  { color: active ? '#FFFFFF' : theme.colors.primary },
+                                ]}
+                              >
+                                {levelBadge}
+                              </Text>
+                            </View>
+                            <View>
+                              <Text
+                                style={[
+                                  styles.floorTabTitle,
+                                  { color: active ? '#FFFFFF' : theme.colors.textPrimary },
+                                ]}
+                              >
+                                {fl.floor_name}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.floorTabMeta,
+                                  {
+                                    color: active
+                                      ? 'rgba(255, 255, 255, 0.82)'
+                                      : theme.colors.textMuted,
+                                  },
+                                ]}
+                              >
+                                {fl.room_count} {fl.room_count === 1 ? 'Room' : 'Rooms'}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                   </ScrollView>
-                </View>
-              )}
-
-              {/* Schematic Sample Governance Banner */}
-              {isSchematic && (
-                <View style={styles.schematicBanner}>
-                  <Ionicons name="information-circle" size={17} color={Colors.warning} />
-                  <Text style={styles.schematicText}>
-                    <Text style={{ fontWeight: '800' }}>Schematic Floor Layout (Sample Data): </Text>
-                    Local indoor room coordinates are illustrative schematics pending departmental CAD approval.
-                  </Text>
                 </View>
               )}
 
               {/* Interactive SVG Floor Plan Viewer */}
               {loadingFloor ? (
                 <View style={styles.loaderBox}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.loaderText}>Loading indoor floor plan…</Text>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={[styles.loaderText, { color: theme.colors.textMuted }]}>
+                    Loading floor layout…
+                  </Text>
                 </View>
               ) : floorPlan?.overlay ? (
-                <View style={styles.planCard}>
-                  <View style={styles.planToolbar}>
-                    <Text style={styles.planTitle}>
-                      {floorPlan.floor.floor_name} Interactive Plan
+                <View
+                  style={[
+                    styles.planCard,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderSubtle,
+                    },
+                    theme.shadows.card,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.planToolbar,
+                      {
+                        backgroundColor: theme.colors.surfaceMuted,
+                        borderBottomColor: theme.colors.borderSubtle,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.planTitle, { color: theme.colors.textPrimary }]}>
+                      {floorPlan.floor.floor_name} Layout
                     </Text>
                     <View style={styles.zoomControls}>
                       <TouchableOpacity
-                        style={styles.zoomBtn}
+                        style={[
+                          styles.zoomBtn,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.borderSubtle,
+                          },
+                        ]}
                         onPress={() => setZoom((z) => Math.max(0.8, +(z - 0.25).toFixed(2)))}
                         accessibilityLabel="Zoom out indoor plan"
                       >
-                        <Ionicons name="remove" size={16} color={Colors.textPrimary} />
+                        <Ionicons name="remove" size={15} color={theme.colors.textPrimary} />
                       </TouchableOpacity>
-                      <Text style={styles.zoomLabel}>{Math.round(zoom * 100)}%</Text>
+                      <Text style={[styles.zoomLabel, { color: theme.colors.textSecondary }]}>
+                        {Math.round(zoom * 100)}%
+                      </Text>
                       <TouchableOpacity
-                        style={styles.zoomBtn}
+                        style={[
+                          styles.zoomBtn,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.borderSubtle,
+                          },
+                        ]}
                         onPress={() => setZoom((z) => Math.min(2.0, +(z + 0.25).toFixed(2)))}
                         accessibilityLabel="Zoom in indoor plan"
                       >
-                        <Ionicons name="add" size={16} color={Colors.textPrimary} />
+                        <Ionicons name="add" size={15} color={theme.colors.textPrimary} />
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoom(1)}>
-                        <Ionicons name="refresh" size={14} color={Colors.primary} />
+                      <TouchableOpacity
+                        style={[
+                          styles.zoomBtn,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.borderSubtle,
+                          },
+                        ]}
+                        onPress={() => setZoom(1)}
+                      >
+                        <Ionicons name="refresh" size={13} color={theme.colors.primary} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -326,8 +449,8 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
                     contentContainerStyle={styles.svgScrollContent}
                   >
                     <Svg
-                      width={Math.round(330 * zoom)}
-                      height={Math.round(215 * zoom)}
+                      width={Math.round(335 * zoom)}
+                      height={Math.round(220 * zoom)}
                       viewBox={`0 0 ${canvasW} ${canvasH}`}
                     >
                       {/* Building Slab */}
@@ -336,10 +459,10 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
                         y={55}
                         width={canvasW - 100}
                         height={canvasH - 110}
-                        rx={8}
+                        rx={10}
                         fill="#FFFFFF"
-                        stroke="#64748B"
-                        strokeWidth={3}
+                        stroke="#94A3B8"
+                        strokeWidth={2.5}
                       />
 
                       {/* Corridors */}
@@ -384,6 +507,18 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
                               if (linkedRoom) handleSelectRoom(linkedRoom);
                             }}
                           >
+                            {isSelected && (
+                              <Rect
+                                x={poly.bounds.x - 4}
+                                y={poly.bounds.y - 4}
+                                width={poly.bounds.w + 8}
+                                height={poly.bounds.h + 8}
+                                rx={9}
+                                fill="none"
+                                stroke="#3B82F6"
+                                strokeWidth={3.5}
+                              />
+                            )}
                             <Rect
                               x={poly.bounds.x}
                               y={poly.bounds.y}
@@ -392,7 +527,7 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
                               rx={6}
                               fill={fill}
                               stroke={isSelected ? '#1E3666' : '#94A3B8'}
-                              strokeWidth={isSelected ? 4 : 2}
+                              strokeWidth={isSelected ? 3.5 : 1.8}
                             />
                             <SvgText
                               x={poly.bounds.x + poly.bounds.w / 2}
@@ -444,102 +579,320 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
                       ))}
                     </Svg>
                   </ScrollView>
+
+                  {/* Subtle Color Legend */}
+                  <View
+                    style={[
+                      styles.legendRow,
+                      {
+                        borderTopColor: theme.colors.borderSubtle,
+                        backgroundColor: theme.colors.surfaceMuted,
+                      },
+                    ]}
+                  >
+                    {[
+                      { label: 'Faculty Cabin', color: '#FFF7ED', border: '#F59E0B' },
+                      { label: 'HoD Cabin', color: '#FEF3C7', border: '#D97706' },
+                      { label: 'Laboratory', color: '#EFF6FF', border: '#3B82F6' },
+                      { label: 'Classroom', color: '#F8FAFC', border: '#64748B' },
+                      { label: 'Selected', color: '#27447E', border: '#27447E' },
+                    ].map((lg) => (
+                      <View key={lg.label} style={styles.legendItem}>
+                        <View
+                          style={[
+                            styles.legendSwatch,
+                            { backgroundColor: lg.color, borderColor: lg.border },
+                          ]}
+                        />
+                        <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                          {lg.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               ) : (
-                <View style={styles.emptyPlanBox}>
-                  <Ionicons name="map-outline" size={28} color={Colors.textMuted} />
-                  <Text style={styles.emptyPlanTitle}>No Vector Plan Published Yet</Text>
-                  <Text style={styles.emptyPlanSub}>
-                    Browse the verified room directory below for this floor.
-                  </Text>
+                /* Compact Empty State per UI DESIGN.txt Section 7 */
+                <View
+                  style={[
+                    styles.compactEmptyPlanBar,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderSubtle,
+                    },
+                  ]}
+                >
+                  <Ionicons name="map-outline" size={18} color={theme.colors.textMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.emptyPlanTitle, { color: theme.colors.textPrimary }]}>
+                      Floor plan not available yet
+                    </Text>
+                    <Text style={[styles.emptyPlanSub, { color: theme.colors.textMuted }]}>
+                      Explore verified rooms below
+                    </Text>
+                  </View>
                 </View>
               )}
 
-              {/* Selected Room Detail Highlight */}
+              {/* Selected Room Detail & Seated Faculty Roster */}
               {selectedRoom && (
-                <View style={styles.selectedRoomCard}>
+                <View
+                  style={[
+                    styles.selectedRoomCard,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.primary,
+                    },
+                    theme.shadows.card,
+                  ]}
+                >
                   <View style={styles.selectedRoomHeader}>
-                    <View style={styles.roomNumBadge}>
+                    <View style={[styles.roomNumBadge, { backgroundColor: theme.colors.primary }]}>
                       <Text style={styles.roomNumBadgeText}>{selectedRoom.room_number}</Text>
                     </View>
-                    <Text style={styles.roomTypeBadge}>
+                    <Text style={[styles.roomTypeBadge, { color: theme.colors.textMuted }]}>
                       {selectedRoom.room_type.replace(/_/g, ' ')}
                     </Text>
                   </View>
-                  <Text style={styles.selectedRoomTitle}>{selectedRoom.room_name}</Text>
+
+                  <Text style={[styles.selectedRoomTitle, { color: theme.colors.textPrimary }]}>
+                    {selectedRoom.room_name}
+                  </Text>
                   {selectedRoom.description ? (
-                    <Text style={styles.selectedRoomDesc}>{selectedRoom.description}</Text>
+                    <Text style={[styles.selectedRoomDesc, { color: theme.colors.textSecondary }]}>
+                      {selectedRoom.description}
+                    </Text>
                   ) : null}
+
                   <View style={styles.roomMetaRow}>
                     {selectedRoom.capacity ? (
-                      <Text style={styles.roomMetaItem}>Capacity: {selectedRoom.capacity}</Text>
+                      <Text style={[styles.roomMetaItem, { color: theme.colors.textMuted }]}>
+                        Capacity: {selectedRoom.capacity}
+                      </Text>
                     ) : null}
-                    <Text style={styles.roomMetaItem}>
+                    <Text style={[styles.roomMetaItem, { color: theme.colors.textMuted }]}>
                       {selectedRoom.is_accessible ? 'Step-Free Access' : 'Stair Access'}
                     </Text>
                   </View>
+
                   {roomOccupants.length > 0 && (
-                    <View style={styles.occupantsBox}>
-                      <Text style={styles.occupantsLabel}>Assigned Faculty:</Text>
-                      {roomOccupants.map((occ) => (
-                        <Text key={occ.staff_id} style={styles.occupantRow}>
-                          • {occ.display_name} ({occ.designation})
-                        </Text>
-                      ))}
+                    <View
+                      style={[
+                        styles.occupantsBox,
+                        { borderTopColor: theme.colors.divider },
+                      ]}
+                    >
+                      <View style={styles.occupantsHeaderRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons
+                            name="people-outline"
+                            size={15}
+                            color={theme.colors.primary}
+                          />
+                          <Text
+                            style={[styles.occupantsLabel, { color: theme.colors.textPrimary }]}
+                          >
+                            Seated Faculty ({roomOccupants.length})
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.occupantsList}>
+                        {roomOccupants.map((occ) => {
+                          const initials = occ.display_name
+                            .replace(/^(Dr\.|Mr\.|Ms\.|Prof\.)\s*/i, '')
+                            .split(' ')
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((w) => w[0]?.toUpperCase() || '')
+                            .join('');
+                          const isAvailable = occ.effective_availability === 'AVAILABLE';
+                          const isBusy = occ.effective_availability === 'BUSY';
+                          return (
+                            <View
+                              key={occ.staff_id}
+                              style={[
+                                styles.occupantCardRow,
+                                {
+                                  backgroundColor: theme.colors.surfaceMuted,
+                                  borderColor: theme.colors.borderSubtle,
+                                },
+                              ]}
+                            >
+                              <View
+                                style={[
+                                  styles.occupantAvatar,
+                                  { backgroundColor: theme.colors.primarySoft },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.occupantAvatarText,
+                                    { color: theme.colors.primary },
+                                  ]}
+                                >
+                                  {initials || 'RV'}
+                                </Text>
+                              </View>
+
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={[
+                                    styles.occupantName,
+                                    { color: theme.colors.textPrimary },
+                                  ]}
+                                >
+                                  {occ.display_name}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.occupantDesignation,
+                                    { color: theme.colors.textSecondary },
+                                  ]}
+                                >
+                                  {occ.designation}
+                                  {occ.dept_code ? ` • ${occ.dept_code}` : ''}
+                                </Text>
+                              </View>
+
+                              <View
+                                style={[
+                                  styles.availabilityPill,
+                                  {
+                                    backgroundColor: isAvailable
+                                      ? theme.colors.successBg
+                                      : isBusy
+                                      ? theme.colors.warningBg
+                                      : '#E2E8F0',
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.availabilityPillText,
+                                    {
+                                      color: isAvailable
+                                        ? theme.colors.success
+                                        : isBusy
+                                        ? theme.colors.warning
+                                        : theme.colors.textSecondary,
+                                    },
+                                  ]}
+                                >
+                                  {isAvailable ? 'Available' : isBusy ? 'In Class' : 'Cabin'}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
                     </View>
                   )}
                 </View>
               )}
 
-              {/* Searchable Room List (Accessible Fallback to Small SVG Targets) */}
+              {/* Clean Scannable Room List */}
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>
-                  Floor Rooms ({filteredRooms.length})
-                </Text>
-                <View style={styles.roomSearchBox}>
-                  <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.sectionLabel, { color: theme.colors.textPrimary }]}>
+                    Rooms on this Floor
+                  </Text>
+                  <Text style={[styles.sectionCountText, { color: theme.colors.textMuted }]}>
+                    {filteredRooms.length} {filteredRooms.length === 1 ? 'Room' : 'Rooms'}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.roomSearchBox,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderSubtle,
+                    },
+                  ]}
+                >
+                  <Ionicons name="search-outline" size={16} color={theme.colors.textMuted} />
                   <TextInput
-                    style={styles.roomSearchInput}
+                    style={[styles.roomSearchInput, { color: theme.colors.textPrimary }]}
                     value={roomFilter}
                     onChangeText={setRoomFilter}
-                    placeholder="Filter rooms by number, lab or hall name..."
-                    placeholderTextColor={Colors.textMuted}
+                    placeholder="Filter rooms by code, name, or type..."
+                    placeholderTextColor={theme.colors.textMuted}
                   />
                   {roomFilter.length > 0 && (
                     <TouchableOpacity onPress={() => setRoomFilter('')}>
-                      <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                      <Ionicons name="close-circle" size={16} color={theme.colors.textMuted} />
                     </TouchableOpacity>
                   )}
                 </View>
 
                 {filteredRooms.length === 0 ? (
-                  <Text style={styles.noRoomsText}>
+                  <Text style={[styles.noRoomsText, { color: theme.colors.textMuted }]}>
                     No rooms match your filter on this floor.
                   </Text>
                 ) : (
-                  <View style={{ gap: 8 }}>
-                    {filteredRooms.map((r) => {
+                  <View
+                    style={[
+                      styles.roomsListContainer,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.borderSubtle,
+                      },
+                      theme.shadows.card,
+                    ]}
+                  >
+                    {filteredRooms.map((r, idx) => {
                       const active = selectedRoom?.room_id === r.room_id;
+                      const isLast = idx === filteredRooms.length - 1;
                       return (
                         <TouchableOpacity
                           key={r.room_id}
-                          style={[styles.roomRow, active && styles.roomRowActive]}
+                          activeOpacity={0.78}
+                          style={[
+                            styles.roomRow,
+                            active && { backgroundColor: theme.colors.primarySoft },
+                            !isLast && {
+                              borderBottomWidth: StyleSheet.hairlineWidth,
+                              borderBottomColor: theme.colors.divider,
+                            },
+                          ]}
                           onPress={() => handleSelectRoom(r)}
                         >
-                          <View style={styles.roomRowBadge}>
-                            <Text style={styles.roomRowBadgeText}>{r.room_number}</Text>
+                          <View
+                            style={[
+                              styles.roomRowBadge,
+                              {
+                                backgroundColor: active
+                                  ? theme.colors.primary
+                                  : theme.colors.surfaceMuted,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.roomRowBadgeText,
+                                { color: active ? '#FFFFFF' : theme.colors.primary },
+                              ]}
+                            >
+                              {r.room_number}
+                            </Text>
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.roomRowName}>{r.room_name}</Text>
-                            <Text style={styles.roomRowSub}>
+                            <Text
+                              style={[styles.roomRowName, { color: theme.colors.textPrimary }]}
+                              numberOfLines={1}
+                            >
+                              {r.room_name}
+                            </Text>
+                            <Text style={[styles.roomRowSub, { color: theme.colors.textMuted }]}>
                               {r.room_type.replace(/_/g, ' ')}
                               {r.capacity ? ` • ${r.capacity} seats` : ''}
                             </Text>
                           </View>
                           <Ionicons
-                            name={active ? 'radio-button-on' : 'chevron-forward'}
-                            size={17}
-                            color={active ? Colors.primary : Colors.textMuted}
+                            name={active ? 'checkmark-circle' : 'chevron-forward'}
+                            size={18}
+                            color={active ? theme.colors.primary : theme.colors.textMuted}
                           />
                         </TouchableOpacity>
                       );
@@ -549,7 +902,7 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
               </View>
             </>
           )}
-        </ScrollView>
+        </KeyboardSafeScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -558,23 +911,20 @@ export const IndoorFloorModal: React.FC<IndoorFloorModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    backgroundColor: Colors.card,
+    paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: 10,
+    gap: 11,
+    overflow: 'hidden',
   },
   backBtn: {
     width: 38,
     height: 38,
     borderRadius: Radius.full,
-    backgroundColor: Colors.cardSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -582,41 +932,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   breadcrumb: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primary,
-    textTransform: 'uppercase',
+    fontSize: 11,
+    fontWeight: '500',
   },
   buildingTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   routeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: Radius.full,
   },
   routeChipText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   scrollContent: {
-    padding: Spacing.md,
+    padding: 16,
     paddingBottom: 36,
-    gap: Spacing.md,
+    gap: 16,
   },
   summaryCard: {
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   metaBadgesRow: {
     flexDirection: 'row',
@@ -625,47 +970,40 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   codeBadge: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 7,
   },
   codeBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   metaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.cardSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 7,
   },
   metaBadgeText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '600',
-    color: Colors.textSecondary,
   },
   accessBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.successBg,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 7,
   },
   accessBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.success,
+    fontSize: 11.5,
+    fontWeight: '600',
   },
   buildingDesc: {
-    fontSize: 12.5,
-    color: Colors.textSecondary,
+    fontSize: 13,
     lineHeight: 18,
   },
   loaderBox: {
@@ -674,80 +1012,73 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   loaderText: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: 12.5,
   },
   section: {
-    gap: 8,
+    gap: 9,
   },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  floorChipsRow: {
-    gap: 8,
-  },
-  floorChip: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    justifyContent: 'space-between',
   },
-  floorChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  floorChipText: {
-    fontSize: 12,
+  sectionLabel: {
+    fontSize: 15,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
-  floorChipTextActive: {
-    color: '#FFFFFF',
+  sectionCountText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
-  schematicBanner: {
+  floorSelectorRow: {
+    gap: 10,
+    paddingVertical: 2,
+  },
+  floorTabPill: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: Colors.warningBg,
-    borderRadius: Radius.md,
-    padding: 10,
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    minWidth: 148,
   },
-  schematicText: {
-    flex: 1,
+  floorCodeBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floorCodeText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  floorTabTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  floorTabMeta: {
     fontSize: 11,
-    color: '#92400E',
-    lineHeight: 16,
+    marginTop: 1,
   },
   planCard: {
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   planToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.cardSecondary,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   planTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   zoomControls: {
     flexDirection: 'row',
@@ -757,166 +1088,206 @@ const styles = StyleSheet.create({
   zoomBtn: {
     width: 28,
     height: 28,
-    borderRadius: 6,
-    backgroundColor: Colors.card,
+    borderRadius: 7,
     borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontSize: 11.5,
+    fontWeight: '600',
     minWidth: 36,
     textAlign: 'center',
   },
   svgScrollContent: {
-    padding: 10,
+    padding: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyPlanBox: {
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
-    padding: 20,
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+  },
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
+  },
+  legendSwatch: {
+    width: 11,
+    height: 11,
+    borderRadius: 3,
+    borderWidth: 1.5,
+  },
+  legendText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  compactEmptyPlanBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   emptyPlanTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginTop: 6,
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   emptyPlanSub: {
     fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 2,
-    textAlign: 'center',
+    marginTop: 1,
   },
   selectedRoomCard: {
-    backgroundColor: Colors.primaryLight,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
+    borderRadius: 16,
+    padding: 15,
+    borderWidth: 1.5,
   },
   selectedRoomHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   roomNumBadge: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 7,
   },
   roomNumBadgeText: {
     color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   roomTypeBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontSize: 11.5,
+    fontWeight: '600',
   },
   selectedRoomTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
   selectedRoomDesc: {
-    fontSize: 12,
-    color: Colors.textSecondary,
+    fontSize: 12.5,
     marginTop: 3,
+    lineHeight: 17,
   },
   roomMetaRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
     marginTop: 6,
   },
   roomMetaItem: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    fontSize: 11.5,
+    fontWeight: '500',
   },
   occupantsBox: {
-    marginTop: 8,
-    paddingTop: 6,
+    marginTop: 12,
+    paddingTop: 11,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderStrong,
+  },
+  occupantsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 9,
   },
   occupantsLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 2,
+    fontSize: 13,
+    fontWeight: '600',
   },
-  occupantRow: {
+  occupantsList: {
+    gap: 7,
+  },
+  occupantCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  occupantAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  occupantAvatarText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  occupantName: {
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+  occupantDesignation: {
     fontSize: 11.5,
-    color: Colors.textPrimary,
+    marginTop: 1,
+  },
+  availabilityPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 7,
+  },
+  availabilityPillText: {
+    fontSize: 10.5,
+    fontWeight: '600',
   },
   roomSearchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: Radius.md,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 10,
-    height: 40,
-    gap: 6,
+    paddingHorizontal: 11,
+    height: 42,
+    gap: 7,
   },
   roomSearchInput: {
     flex: 1,
-    fontSize: 13,
-    color: Colors.textPrimary,
+    fontSize: 13.5,
     paddingVertical: 0,
   },
   noRoomsText: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
+    fontSize: 12.5,
     paddingVertical: 8,
+  },
+  roomsListContainer: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   roomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: Radius.md,
-    padding: 11,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 10,
-  },
-  roomRowActive: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F8FAFC',
+    paddingVertical: 12,
+    paddingHorizontal: 13,
+    gap: 11,
   },
   roomRowBadge: {
-    backgroundColor: Colors.cardSecondary,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 5,
-    borderRadius: Radius.sm,
+    borderRadius: 8,
+    minWidth: 66,
+    alignItems: 'center',
   },
   roomRowBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   roomRowName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   roomRowSub: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 11.5,
     marginTop: 1,
   },
 });

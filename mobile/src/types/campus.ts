@@ -117,7 +117,7 @@ export interface FloorPlanOverlay {
   floor_plan_id: number;
   floor_id: number;
   building_id: number;
-  coordinate_space: 'NORMALIZED_1000' | 'LOCAL_PIXEL';
+  coordinate_space: 'NORMALIZED_1000' | 'LOCAL_PIXEL' | string;
   is_schematic_sample: boolean;
   canvas: {
     width: number;
@@ -129,6 +129,8 @@ export interface FloorPlanOverlay {
   route_network?: {
     is_verified: boolean;
     note?: string;
+    nodes?: unknown[];
+    edges?: unknown[];
   };
 }
 
@@ -144,6 +146,7 @@ export interface RoomItem {
   dept_code?: string | null;
   dept_name?: string | null;
   floor_id?: number;
+  floor_number?: number;
   floor_name?: string;
   building_id?: number;
   building_code?: string;
@@ -165,6 +168,7 @@ export interface FloorPlanResponse {
     floor_plan_id: number;
     floor_id: number;
     version_label: string;
+    asset_url?: string | null;
     file_format: string;
     canvas_width: number;
     canvas_height: number;

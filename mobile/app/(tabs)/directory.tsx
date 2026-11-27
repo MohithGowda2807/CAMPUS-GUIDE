@@ -11,7 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useCampusData } from '../../src/context/CampusDataContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { FacultyCard } from '../../src/components/FacultyCard';
 import { SearchBar } from '../../src/components/SearchBar';
 import { StatusPill } from '../../src/components/StatusPill';
@@ -22,6 +24,7 @@ import type { FacultyMember } from '../../src/types/campus';
 export default function DirectoryScreen() {
   const router = useRouter();
   const { faculty, departments, buildings, selectBuilding } = useCampusData();
+  const { isGlass, theme } = useTheme();
 
   const [search, setSearch] = useState('');
   const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
@@ -35,9 +38,13 @@ export default function DirectoryScreen() {
         !q ||
         f.display_name.toLowerCase().includes(q) ||
         f.employee_code.toLowerCase().includes(q) ||
+        String(f.staff_id) === q ||
         f.dept_name.toLowerCase().includes(q) ||
         f.dept_code.toLowerCase().includes(q) ||
-        f.designation.toLowerCase().includes(q);
+        f.designation.toLowerCase().includes(q) ||
+        (f.office_room_number && f.office_room_number.toLowerCase().includes(q)) ||
+        (f.office_room_name && f.office_room_name.toLowerCase().includes(q)) ||
+        (f.program_name && f.program_name.toLowerCase().includes(q));
       return matchesDept && matchesSearch;
     });
   }, [faculty, search, selectedDeptId]);
@@ -68,19 +75,33 @@ export default function DirectoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.canvas }]}
+      edges={['top', 'left', 'right']}
+    >
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Faculty Directory</Text>
-        <Text style={styles.subtitle}>
-          {faculty.length} Verified RVCE Academic & Research Profiles
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: isGlass ? theme.colors.surfaceFloating : theme.colors.surface,
+            borderBottomColor: theme.colors.borderSubtle,
+          },
+        ]}
+      >
+        {isGlass && <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />}
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>
+          Faculty Directory
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+          {faculty.length} RVCE Academic & Research Profiles
         </Text>
 
         <View style={styles.searchRow}>
           <SearchBar
             value={search}
             onChangeText={setSearch}
-            placeholder="Search by name, employee ID or department..."
+            placeholder="Search by name, cabin, or department..."
             onClear={() => setSearch('')}
           />
         </View>
@@ -158,7 +179,16 @@ export default function DirectoryScreen() {
         onRequestClose={() => setActiveProfile(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.profileSheet}>
+          <View
+            style={[
+              styles.profileSheet,
+              isGlass && {
+                backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                overflow: 'hidden',
+              },
+            ]}
+          >
+            {isGlass && <BlurView intensity={65} tint="light" style={StyleSheet.absoluteFill} />}
             <View style={styles.sheetDragPill} />
 
             {activeProfile && (
@@ -233,9 +263,15 @@ export default function DirectoryScreen() {
                     style={styles.locateFullBtn}
                     onPress={() => handleLocateOffice(activeProfile)}
                   >
-                    <Ionicons name="navigate" size={16} color="#FFFFFF" />
+                    <Ionicons
+                      name={activeProfile.office_room_id ? 'layers' : 'navigate'}
+                      size={16}
+                      color="#FFFFFF"
+                    />
                     <Text style={styles.locateFullBtnText}>
-                      View Department Building on Map
+                      {activeProfile.office_room_number
+                        ? `Open Cabin ${activeProfile.office_room_number} (${activeProfile.floor_name || 'Floor Plan'})`
+                        : 'View Department Building on Map'}
                     </Text>
                   </TouchableOpacity>
                 ) : null}

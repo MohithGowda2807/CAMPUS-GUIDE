@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
+import { BlurView } from 'expo-blur';
+import { useTheme } from '../context/ThemeContext';
 import { Radius, Spacing } from '../theme/spacing';
 
 interface SearchBarProps {
@@ -17,66 +18,90 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   value = '',
   onChangeText,
   onPress,
-  placeholder = 'Search RVCE buildings, faculty, labs...',
+  placeholder = 'Search buildings, faculty, cabins, labs...',
   editable = true,
   onClear,
 }) => {
-  const content = (
-    <View style={styles.container}>
-      <Ionicons name="search" size={20} color={Colors.primary} style={styles.icon} />
+  const { isGlass, theme } = useTheme();
+
+  const innerContent = (
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: isGlass ? theme.colors.surfaceFloating : theme.colors.surface,
+          borderColor: isGlass
+            ? theme.colors.surfaceFloatingBorder
+            : theme.colors.borderSubtle,
+        },
+        theme.shadows.floating,
+      ]}
+    >
+      {isGlass && <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFill} />}
+      <Ionicons name="search" size={19} color={theme.colors.primary} style={styles.icon} />
       <TextInput
-        style={styles.input}
+        style={[styles.input, { color: theme.colors.textPrimary }]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={theme.colors.textMuted}
         editable={editable}
         pointerEvents={editable ? 'auto' : 'none'}
         returnKeyType="search"
       />
-      {value.length > 0 && onClear && (
-        <TouchableOpacity onPress={onClear} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+      {value.length > 0 && onClear ? (
+        <TouchableOpacity
+          onPress={onClear}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
         </TouchableOpacity>
+      ) : (
+        !editable && (
+          <View style={[styles.trailingBadge, { backgroundColor: theme.colors.primarySoft }]}>
+            <Ionicons name="options-outline" size={15} color={theme.colors.primary} />
+          </View>
+        )
       )}
     </View>
   );
 
   if (!editable && onPress) {
     return (
-      <TouchableOpacity activeOpacity={0.88} onPress={onPress}>
-        {content}
+      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
+        {innerContent}
       </TouchableOpacity>
     );
   }
 
-  return content;
+  return innerContent;
 };
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
-    height: 48,
+    height: 50,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    overflow: 'hidden',
   },
   icon: {
     marginRight: Spacing.sm,
   },
   input: {
     flex: 1,
-    fontSize: 14,
-    color: Colors.textPrimary,
+    fontSize: 14.5,
     fontFamily: 'System',
     paddingVertical: 0,
+  },
+  trailingBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
   },
 });

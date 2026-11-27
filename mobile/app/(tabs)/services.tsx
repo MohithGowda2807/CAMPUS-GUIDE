@@ -10,14 +10,17 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardSafeScrollView } from '../../src/components/KeyboardSafeScrollView';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useCampusData } from '../../src/context/CampusDataContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import { campusApi } from '../../src/services/api';
 import { getFacilityIcon } from '../../src/components/NativeCampusMap';
 import { Colors } from '../../src/theme/colors';
 import { Radius, Spacing } from '../../src/theme/spacing';
-import type { FacilityItem, VisitPassReceipt } from '../../src/types/campus';
+import type { FacilityItem, FacultyMember, VisitPassReceipt } from '../../src/types/campus';
 
 const FACILITY_FILTERS = [
   { key: 'ALL', label: 'All' },
@@ -33,7 +36,8 @@ const FACILITY_FILTERS = [
 export default function ServicesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const { facilities, buildings, selectFacility } = useCampusData();
+  const { facilities, buildings, faculty, selectFacility } = useCampusData();
+  const { isGlass, theme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<'AMENITIES' | 'VISITOR_PASS'>('AMENITIES');
   const [facCategory, setFacCategory] = useState('ALL');
@@ -53,13 +57,37 @@ export default function ServicesScreen() {
   const [org, setOrg] = useState('');
   const [purpose, setPurpose] = useState('');
   const [selectedBldgId, setSelectedBldgId] = useState<number>(
-    buildings.find((b) => b.building_code === 'ADMIN')?.building_id ||
+    buildings.find((b) => b.building_code === 'CSE')?.building_id ||
+      buildings.find((b) => b.building_code === 'ADMIN')?.building_id ||
       buildings[1]?.building_id ||
-      2
+      3
   );
+  const [visitType, setVisitType] = useState<'GENERAL' | 'FACULTY'>('GENERAL');
+  const [selectedHostFaculty, setSelectedHostFaculty] = useState<FacultyMember | null>(null);
+  const [facultyQuery, setFacultyQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [passReceipt, setPassReceipt] = useState<VisitPassReceipt | null>(null);
+
+  const matchingHostFaculty = useMemo(() => {
+    const q = facultyQuery.trim().toLowerCase();
+    // Put demo-linked faculty (Dr. Shanta Ranga Swamy #39, Dr. Ramakanth Kumar P #40, EEE HoD #181) at top when query is empty
+    const priorityIds = new Set([39, 40, 181, 169, 174, 175, 172]);
+    const baseList = q
+      ? faculty.filter(
+          (f) =>
+            f.display_name.toLowerCase().includes(q) ||
+            f.dept_code.toLowerCase().includes(q) ||
+            f.designation.toLowerCase().includes(q) ||
+            (f.office_room_number && f.office_room_number.toLowerCase().includes(q)) ||
+            String(f.staff_id) === q
+        )
+      : [
+          ...faculty.filter((f) => priorityIds.has(f.staff_id)),
+          ...faculty.filter((f) => !priorityIds.has(f.staff_id)).slice(0, 15),
+        ];
+    return baseList.slice(0, 18);
+  }, [faculty, facultyQuery]);
 
   const filteredFacilities = useMemo(() => {
     if (facCategory === 'ALL') return facilities;
@@ -87,6 +115,10 @@ export default function ServicesScreen() {
       setFormError('Please enter a valid email address or leave it blank.');
       return;
     }
+    if (visitType === 'FACULTY' && !selectedHostFaculty) {
+      setFormError('Please select the Faculty member you are visiting, or switch to General Campus Visit.');
+      return;
+    }
     if (purpose.trim().length < 3) {
       setFormError('Please briefly state your purpose of visit.');
       return;
@@ -94,12 +126,26 @@ export default function ServicesScreen() {
 
     setSubmitting(true);
     try {
+      const hostStaffId =
+        visitType === 'FACULTY' && selectedHostFaculty ? selectedHostFaculty.staff_id : null;
+      const destRoomId =
+        visitType === 'FACULTY' && selectedHostFaculty?.office_room_id
+          ? selectedHostFaculty.office_room_id
+          : null;
+      const destBldgId =
+        visitType === 'FACULTY' && selectedHostFaculty?.building_id
+          ? selectedHostFaculty.building_id
+          : selectedBldgId;
+
       const res = await campusApi.preRegisterVisitor({
         full_name: fullName.trim(),
         contact_phone: phone.trim(),
         contact_email: email.trim() || null,
         organization: org.trim() || 'Campus Visitor',
-        destination_building_id: selectedBldgId,
+        destination_building_id: destBldgId,
+        destination_room_id: destRoomId,
+        host_staff_id: hostStaffId,
+        requires_host_approval: Boolean(hostStaffId),
         purpose: purpose.trim(),
         gate_name: 'Main Mysuru Road Gate',
       });
@@ -116,16 +162,27 @@ export default function ServicesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.canvas }]}
+      edges={['top', 'left', 'right']}
+    >
+      <View style={{ flex: 1 }}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Campus Services</Text>
-          <Text style={styles.subtitle}>
-            Verified Facilities, Cafeterias & Gate Visitor Registration
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: isGlass ? theme.colors.surfaceFloating : theme.colors.surface,
+              borderBottomColor: theme.colors.borderSubtle,
+            },
+          ]}
+        >
+          {isGlass && <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />}
+          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>
+            Campus Services
+          </Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+            Facilities, Cafeterias, Clinic & Visitor Gate Passes
           </Text>
 
           {/* Segmented Tab Switcher */}
@@ -164,14 +221,57 @@ export default function ServicesScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <KeyboardSafeScrollView
           style={styles.scroll}
           contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
         >
           {activeTab === 'AMENITIES' ? (
             <>
+              {/* Prominent Emergency / 24x7 Clinic Strip */}
+              <TouchableOpacity
+                activeOpacity={0.86}
+                onPress={() => {
+                  const clinic = facilities.find(
+                    (f) => f.category === 'MEDICAL_FIRST_AID'
+                  );
+                  if (clinic) handleFacilitySelect(clinic);
+                  else router.push('/(tabs)/map');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#FEF2F2',
+                  borderColor: '#FECACA',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  padding: 12,
+                  marginBottom: 12,
+                  gap: 11,
+                }}
+              >
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 11,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="medkit" size={19} color="#B91C1C" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#991B1B' }}>
+                    24x7 Campus Health & First Aid Clinic
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#B91C1C', marginTop: 1 }}>
+                    Tap for immediate campus map location & emergency walking route
+                  </Text>
+                </View>
+                <Ionicons name="navigate-circle" size={22} color="#B91C1C" />
+              </TouchableOpacity>
+
               {/* Category Chips */}
               <ScrollView
                 horizontal
@@ -254,6 +354,21 @@ export default function ServicesScreen() {
                     <Text style={styles.receiptRow}>
                       <Text style={styles.receiptLabel}>Destination: </Text>
                       {passReceipt.destination_building_name || 'RVCE Campus'}
+                      {passReceipt.destination_room_number
+                        ? ` • Cabin ${passReceipt.destination_room_number}`
+                        : ''}
+                    </Text>
+                    <Text style={styles.receiptRow}>
+                      <Text style={styles.receiptLabel}>Host / Type: </Text>
+                      {passReceipt.host_name
+                        ? `Meeting ${passReceipt.host_name}`
+                        : 'General Campus Visit'}
+                    </Text>
+                    <Text style={styles.receiptRow}>
+                      <Text style={styles.receiptLabel}>Host Approval: </Text>
+                      {passReceipt.approval_status === 'PENDING'
+                        ? 'SENT TO FACULTY HOST (PENDING)'
+                        : passReceipt.approval_status}
                     </Text>
                     <Text style={styles.receiptRow}>
                       <Text style={styles.receiptLabel}>Purpose: </Text>
@@ -287,6 +402,8 @@ export default function ServicesScreen() {
                         setEmail('');
                         setOrg('');
                         setPurpose('');
+                        setSelectedHostFaculty(null);
+                        setFacultyQuery('');
                         setFormError(null);
                       }}
                     >
@@ -326,6 +443,203 @@ export default function ServicesScreen() {
                     placeholderTextColor={Colors.textMuted}
                     keyboardType="phone-pad"
                   />
+
+                  <Text style={styles.inputLabel}>Visit Category *</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setVisitType('GENERAL');
+                        setSelectedHostFaculty(null);
+                      }}
+                      style={[
+                        styles.bldgChip,
+                        { flex: 1, alignItems: 'center', paddingVertical: 10 },
+                        visitType === 'GENERAL' && styles.bldgChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.bldgChipText,
+                          visitType === 'GENERAL' && styles.bldgChipTextActive,
+                        ]}
+                      >
+                        General Campus Visit
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setVisitType('FACULTY')}
+                      style={[
+                        styles.bldgChip,
+                        { flex: 1, alignItems: 'center', paddingVertical: 10 },
+                        visitType === 'FACULTY' && styles.bldgChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.bldgChipText,
+                          visitType === 'FACULTY' && styles.bldgChipTextActive,
+                        ]}
+                      >
+                        Meet a Specific Faculty
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {visitType === 'FACULTY' && (
+                    <View
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 12,
+                        padding: 11,
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        marginTop: 6,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '700',
+                          color: Colors.primary,
+                          marginBottom: 4,
+                        }}
+                      >
+                        Select Host Faculty (Linked by staff_id) *
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: Colors.textSecondary,
+                          marginBottom: 8,
+                        }}
+                      >
+                        This pass will be sent directly to the selected faculty member's portal (and Admin/Security) for approval.
+                      </Text>
+
+                      {selectedHostFaculty ? (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: '#EEF2FF',
+                            borderRadius: 10,
+                            padding: 10,
+                            borderWidth: 1.5,
+                            borderColor: Colors.primary,
+                            gap: 10,
+                          }}
+                        >
+                          <Ionicons name="person-circle" size={28} color={Colors.primary} />
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                fontSize: 13.5,
+                                fontWeight: '800',
+                                color: Colors.textPrimary,
+                              }}
+                            >
+                              {selectedHostFaculty.display_name}
+                            </Text>
+                            <Text style={{ fontSize: 11.5, color: Colors.textSecondary }}>
+                              {selectedHostFaculty.designation} • {selectedHostFaculty.dept_code} (ID #{selectedHostFaculty.staff_id})
+                              {selectedHostFaculty.office_room_number
+                                ? ` • Cabin ${selectedHostFaculty.office_room_number}`
+                                : ''}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => setSelectedHostFaculty(null)}
+                            style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              backgroundColor: '#FFFFFF',
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: Colors.border,
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.danger }}>
+                              Change
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <TextInput
+                            style={[styles.textInput, { backgroundColor: '#FFFFFF', marginBottom: 8 }]}
+                            value={facultyQuery}
+                            onChangeText={setFacultyQuery}
+                            placeholder="Search faculty by name, dept (CSE, EEE), or staff_id..."
+                            placeholderTextColor={Colors.textMuted}
+                          />
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                          >
+                            {matchingHostFaculty.map((fac) => (
+                              <TouchableOpacity
+                                key={`host-fac-${fac.staff_id}`}
+                                activeOpacity={0.85}
+                                onPress={() => {
+                                  setSelectedHostFaculty(fac);
+                                  if (fac.building_id) {
+                                    setSelectedBldgId(fac.building_id);
+                                  }
+                                }}
+                                style={{
+                                  backgroundColor: '#FFFFFF',
+                                  borderRadius: 10,
+                                  paddingHorizontal: 11,
+                                  paddingVertical: 8,
+                                  borderWidth: 1,
+                                  borderColor: Colors.border,
+                                  minWidth: 175,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 12.5,
+                                    fontWeight: '700',
+                                    color: Colors.textPrimary,
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  {fac.display_name}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    color: Colors.primary,
+                                    fontWeight: '600',
+                                    marginTop: 1,
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  {fac.dept_code} • {fac.designation}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: 10.5,
+                                    color: Colors.textMuted,
+                                    marginTop: 1,
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  ID #{fac.staff_id}
+                                  {fac.office_room_number ? ` • Cabin ${fac.office_room_number}` : ''}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </>
+                      )}
+                    </View>
+                  )}
 
                   <Text style={styles.inputLabel}>Destination Building *</Text>
                   <ScrollView
@@ -397,8 +711,8 @@ export default function ServicesScreen() {
               )}
             </View>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardSafeScrollView>
+      </View>
     </SafeAreaView>
   );
 }
